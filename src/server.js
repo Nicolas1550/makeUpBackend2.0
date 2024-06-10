@@ -1,21 +1,24 @@
+// server.js
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const passport = require('passport');
-require('./passport-config'); // Importa y ejecuta la configuración de passport
+require('./passport-config');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const path = require('path');
-require('express-async-errors'); // Importa express-async-errors para manejar errores en rutas asíncronas
+require('express-async-errors');
 
-const { dbConnect, sequelize } = require('./db');
+const { dbConnect, sequelize, Disponibilidad, Order } = require('./db');  // Asegúrate de importar Order
 const userRoutes = require('./routes/UserRoutes');
 const authRoutes = require('./routes/AuthRoutes');
 const jwtRoutes = require('./routes/JwtRoutes');
 const productRoutes = require('./routes/ProductRoutes');
+const disponibilidadRoutes = require('./routes/DisponibilidadRoutes');
+const services = require('./routes/ServicesRoutes');
+const orderRoutes = require('./routes/OrderRoutes');  // Nueva ruta para órdenes
 
-// Conectar a la base de datos
 dbConnect().catch(err => console.error('Error al conectar a MySQL:', err));
 
 const app = express();
@@ -41,6 +44,9 @@ app.use('/api/products', productRoutes);
 app.use('/api/users', userRoutes);
 app.use('/auth', authRoutes);
 app.use('/api/auth', jwtRoutes);
+app.use('/api/disponibilidades', disponibilidadRoutes);
+app.use('/api/servicios', services);
+app.use('/api/orders', orderRoutes);  // Nueva ruta para órdenes
 
 app.set('trust proxy', 1);
 app.get('/', (req, res) => {
