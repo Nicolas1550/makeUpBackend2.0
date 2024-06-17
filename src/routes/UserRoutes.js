@@ -8,7 +8,8 @@ router.get('/', async (req, res) => {
     const users = await User.findAll();
     res.json(users);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error fetching users:', error.message);
+    res.status(500).json({ message: 'Error fetching users' });
   }
 });
 
@@ -18,7 +19,8 @@ router.post('/', async (req, res) => {
     const newUser = await User.create(req.body);
     res.status(201).json(newUser);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('Error creating user:', error.message);
+    res.status(400).json({ message: 'Error creating user' });
   }
 });
 
@@ -39,7 +41,8 @@ router.patch('/updateRole/:id', async (req, res) => {
     }
     res.json(updatedUser);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error updating user role:', error.message);
+    res.status(500).json({ message: 'Error updating user role' });
   }
 });
 

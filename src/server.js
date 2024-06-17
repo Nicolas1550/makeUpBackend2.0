@@ -18,6 +18,7 @@ const productRoutes = require('./routes/ProductRoutes');
 const disponibilidadRoutes = require('./routes/DisponibilidadRoutes');
 const services = require('./routes/ServicesRoutes');
 const orderRoutes = require('./routes/OrderRoutes');  // Nueva ruta para órdenes
+require('./passport-config'); // Importa la configuración de Passport
 
 dbConnect().catch(err => console.error('Error al conectar a MySQL:', err));
 
@@ -47,6 +48,7 @@ app.use('/api/auth', jwtRoutes);
 app.use('/api/disponibilidades', disponibilidadRoutes);
 app.use('/api/servicios', services);
 app.use('/api/orders', orderRoutes);  // Nueva ruta para órdenes
+app.use(passport.initialize());
 
 app.set('trust proxy', 1);
 app.get('/', (req, res) => {

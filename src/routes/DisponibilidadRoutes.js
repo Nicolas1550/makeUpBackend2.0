@@ -79,7 +79,7 @@ router.put('/:id', async (req, res) => {
   const { servicio_id, fecha_inicio, fecha_fin, disponible } = req.body;
   try {
     console.log('Updating disponibilidad:', req.params.id, req.body);
-    const disponibilidad = await Disponibilidad.findByPk(req.params.id);
+    const disponibilidad = await Disponibilidad.findAll(req.params.id);
     if (!disponibilidad) {
       return res.status(404).json({ message: 'Disponibilidad not found' });
     }

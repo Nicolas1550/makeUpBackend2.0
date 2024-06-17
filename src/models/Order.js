@@ -22,7 +22,7 @@ const Order = sequelize.define('Order', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'disponibilidades',
+      model: 'Disponibilidades',
       key: 'id',
     },
   },
