@@ -2,6 +2,7 @@
 const express = require('express');
 const Servicio = require('../models/Services');
 const router = express.Router();
+const passport = require('passport');
 
 // Ruta para obtener todos los servicios
 router.get('/', async (req, res) => {
@@ -14,8 +15,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Ruta para agregar un nuevo servicio
-router.post('/', async (req, res) => {
+// Ruta para agregar un nuevo servicio, protegida con autenticación
+router.post('/', passport.authenticate('jwt', { session: false }), async (req, res) => {
   const { nombre, descripcion, precio } = req.body;
   try {
     if (!nombre || !precio) {

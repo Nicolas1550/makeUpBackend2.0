@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const passport = require('passport');
 
 // Ruta para obtener todos los usuarios
-router.get('/', async (req, res) => {
+router.get('/', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
     const users = await User.findAll();
     res.json(users);
@@ -24,8 +25,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Ruta para actualizar el rol de un usuario
-router.patch('/updateRole/:id', async (req, res) => {
+// Ruta para actualizar el rol de un usuario, accesible solo por administradores
+router.patch('/updateRole/:id', passport.authenticate('jwt', { session: false }), async (req, res) => {
   const { role } = req.body;
   if (!role) {
     return res.status(400).json({ message: 'Role is required' });
@@ -47,3 +48,4 @@ router.patch('/updateRole/:id', async (req, res) => {
 });
 
 module.exports = router;
+

@@ -19,7 +19,6 @@ const disponibilidadRoutes = require('./routes/DisponibilidadRoutes');
 const services = require('./routes/ServicesRoutes');
 const orderRoutes = require('./routes/OrderRoutes');  // Nueva ruta para órdenes
 const emailRoutes = require('./routes/EmailRoutes');
-require('./passport-config'); // Importa la configuración de Passport
 
 dbConnect().catch(err => console.error('Error al conectar a MySQL:', err));
 
