@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const passport = require('passport');
 const mongoose = require('mongoose'); // Asegúrate de importar mongoose
-const isAdmin = require('../middleware/isAdmin');
+const isAdmin = require('../middleware/IsAdmin');
 const Product = require('../models/Product');
 const upload = require('../middleware/uploadMiddleware');
 
