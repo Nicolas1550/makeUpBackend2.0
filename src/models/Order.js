@@ -3,7 +3,6 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../db');
 const User = require('./User');
 const Disponibilidad = require('./Disponibilidad');
-
 const Order = sequelize.define('Order', {
   id: {
     type: DataTypes.INTEGER,
