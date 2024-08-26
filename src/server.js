@@ -1,9 +1,8 @@
-// server.js
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const http = require('http');  // Necesario para socket.io
-const { Server } = require('socket.io');  // Importa socket.io
+const http = require('http');  
+const { Server } = require('socket.io');  
 const passport = require('passport');
 require('./passport-config');
 const helmet = require('helmet');
@@ -12,19 +11,20 @@ const morgan = require('morgan');
 const path = require('path');
 require('express-async-errors');
 
-const { dbConnect, sequelize, Disponibilidad, Order } = require('./db');
+const { dbConnect, sequelize } = require('./db');  
 const userRoutes = require('./routes/UserRoutes');
 const authRoutes = require('./routes/AuthRoutes');
 const jwtRoutes = require('./routes/JwtRoutes');
 const productRoutes = require('./routes/ProductRoutes');
 const disponibilidadRoutes = require('./routes/DisponibilidadRoutes');
-const services = require('./routes/ServicesRoutes');
+const servicesRoutes = require('./routes/ServicesRoutes');
 const emailRoutes = require('./routes/EmailRoutes');
+const orderRoutes = require('./routes/OrderRoutes'); 
 
 dbConnect().catch(err => console.error('Error al conectar a MySQL:', err));
 
 const app = express();
-const server = http.createServer(app);  // Crear servidor HTTP para usar con socket.io
+const server = http.createServer(app); 
 const io = new Server(server, {
   cors: {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -55,17 +55,13 @@ app.use('/api/users', userRoutes);
 app.use('/auth', authRoutes);
 app.use('/api/auth', jwtRoutes);
 app.use('/api/disponibilidades', disponibilidadRoutes);
-app.use('/api/servicios', services);
+app.use('/api/servicios', servicesRoutes);
 app.use('/api/email', emailRoutes);
-
-// Pasar io a las rutas de órdenes
-const orderRoutes = require('./routes/OrderRoutes')(io); 
-app.use('/api/orders', orderRoutes);
+app.use('/api/orders', orderRoutes(io)); 
 
 // Socket.io evento de conexión
 io.on('connection', (socket) => {
   console.log('Nuevo cliente conectado');
-
   socket.on('disconnect', () => {
     console.log('Cliente desconectado');
   });

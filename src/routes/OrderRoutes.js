@@ -1,13 +1,63 @@
-// routes/OrderRoutes.js
 const express = require('express');
 const Order = require('../models/Order');
 const Disponibilidad = require('../models/Disponibilidad');
+const Servicio = require('../models/Services');
 const User = require('../models/User');
 const authenticate = require('../middleware/auth');
+const isAdmin = require('../middleware/IsAdmin');
 
 module.exports = function (io) {
   const router = express.Router();
 
+  // Ruta para obtener todas las órdenes para el administrador, ordenadas por fecha de creación
+  router.get('/admin/orders', authenticate, isAdmin, async (req, res) => {
+    try {
+      const orders = await Order.findAll({
+        include: [
+          {
+            model: Disponibilidad,
+            as: 'disponibilidad',
+            include: [{ model: Servicio, as: 'servicio' }]
+          },
+          {
+            model: User,
+            as: 'user',
+            attributes: ['nombre', 'email']
+          }
+        ],
+        order: [['createdAt', 'ASC']]
+      });
+
+      res.json(orders);
+    } catch (error) {
+      console.error('Error obteniendo todas las órdenes:', error.message);
+      res.status(500).json({ message: 'Error obteniendo todas las órdenes' });
+    }
+  });
+
+  // Ruta para actualizar el estado de una orden (disponible para el administrador)
+  router.put('/admin/orders/:id', authenticate, isAdmin, async (req, res) => {
+    const { status } = req.body;
+    try {
+      const order = await Order.findByPk(req.params.id);
+      if (!order) {
+        console.log(`Orden con ID ${req.params.id} no encontrada`);
+        return res.status(404).json({ message: 'Orden no encontrada' });
+      }
+  
+      order.status = status;
+      await order.save();
+  
+      // Log para emitir el evento WebSocket
+      console.log(`Emitir evento orderUpdated para orden ${order.id} con estado ${status}`);
+      io.emit('orderUpdated', order);
+  
+      res.json(order);
+    } catch (error) {
+      console.error('Error actualizando el estado de la orden:', error.message);
+      res.status(500).json({ message: 'Error actualizando el estado de la orden' });
+    }
+  });
   // Ruta para crear una nueva orden
   router.post('/', authenticate, async (req, res) => {
     const { disponibilidad_id, total } = req.body;
@@ -16,7 +66,9 @@ module.exports = function (io) {
         return res.status(400).json({ message: 'disponibilidad_id y total son requeridos' });
       }
 
-      const disponibilidad = await Disponibilidad.findByPk(disponibilidad_id);
+      const disponibilidad = await Disponibilidad.findByPk(disponibilidad_id, {
+        include: [{ model: Servicio, as: 'servicio' }]  
+      });
       if (!disponibilidad || !disponibilidad.disponible) {
         return res.status(400).json({ message: 'Disponibilidad no válida o no disponible' });
       }
@@ -33,7 +85,6 @@ module.exports = function (io) {
       await disponibilidad.save();
 
       // Emitir el evento de nueva orden creada al cliente usando el mismo nombre que en el cliente
-      console.log("Emitiendo evento 'orderCreated' con datos:", newOrder);
       io.emit('orderCreated', newOrder);
 
       res.status(201).json(newOrder);
@@ -48,7 +99,7 @@ module.exports = function (io) {
     try {
       const order = await Order.findByPk(req.params.id, {
         include: [
-          { model: Disponibilidad, as: 'disponibilidad' },
+          { model: Disponibilidad, as: 'disponibilidad', include: [{ model: Servicio, as: 'servicio' }] },
           { model: User, as: 'user', attributes: ['nombre', 'email'] }
         ]
       });
@@ -70,12 +121,11 @@ module.exports = function (io) {
       const orders = await Order.findAll({
         where: { user_id: req.user.id },
         include: [
-          { model: Disponibilidad, as: 'disponibilidad' },
+          { model: Disponibilidad, as: 'disponibilidad', include: [{ model: Servicio, as: 'servicio' }] },
           { model: User, as: 'user', attributes: ['nombre', 'email'] }
         ]
       });
 
-      console.log("Órdenes obtenidas para el usuario:", orders);
       res.json(orders);
     } catch (error) {
       console.error('Error obteniendo las órdenes:', error.message);
@@ -95,7 +145,6 @@ module.exports = function (io) {
       order.status = status;
       await order.save();
 
-      console.log("Emitiendo evento 'orderUpdated' con datos:", order);
       io.emit('orderUpdated', order);
 
       res.json(order);

@@ -1,4 +1,3 @@
-// routes/ServicioRoutes.js
 const express = require('express');
 const Servicio = require('../models/Services');
 const router = express.Router();

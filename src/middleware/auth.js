@@ -13,12 +13,12 @@ const authenticate = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET); // Verifica el token usando la clave secreta correcta
-    const user = await User.findByPk(decoded.sub); // Extrae el campo 'sub' como identificador del usuario
+    const decoded = jwt.verify(token, process.env.JWT_SECRET); 
+    const user = await User.findByPk(decoded.sub); 
     if (!user) {
       return res.status(401).json({ message: 'User not found' });
     }
-    req.user = user; // Adjunta el usuario autenticado a la solicitud
+    req.user = user; 
     next();
   } catch (error) {
     console.error('Token is not valid:', error.message);

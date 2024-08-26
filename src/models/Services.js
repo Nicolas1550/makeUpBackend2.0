@@ -1,4 +1,3 @@
-// models/Servicio.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../db');
 

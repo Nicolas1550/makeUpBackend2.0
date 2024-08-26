@@ -10,8 +10,8 @@ router.post('/', async (req, res) => {
     const { user_name, user_email, message } = req.body;
 
     const msg = {
-        to: 'lnicolas62@yahoo.com', // Correo de destino
-        from: 'luciuknicolas15@gmail.com', // Correo autorizado en SendGrid
+        to: 'lnicolas62@yahoo.com', 
+        from: 'luciuknicolas15@gmail.com', 
         subject: `Nuevo mensaje de ${user_name}`,
         text: message,
         html: `<strong>De:</strong> ${user_name} <br><strong>Email:</strong> ${user_email} <br><strong>Mensaje:</strong> ${message}`,

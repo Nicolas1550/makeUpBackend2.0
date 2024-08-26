@@ -15,7 +15,7 @@ router.get('/verify', passport.authenticate('jwt', { session: false }), (req, re
 // Manejar cierre de sesión en el cliente
 router.post('/logout', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
-    res.redirect('http://localhost:3000'); // Redirigir a la página de inicio
+    res.redirect('http://localhost:3000'); 
   } catch (error) {
     res.status(500).json({ message: 'Error al cerrar sesión', error: error.message });
   }

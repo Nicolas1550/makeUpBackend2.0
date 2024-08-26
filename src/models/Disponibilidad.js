@@ -1,4 +1,3 @@
-// models/Disponibilidad.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../db');
 const Servicio = require('../models/Services');

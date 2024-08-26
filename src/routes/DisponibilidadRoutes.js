@@ -1,8 +1,8 @@
-// routes/DisponibilidadRoutes.js
 const express = require('express');
-const Disponibilidad = require('../models/Disponibilidad'); // Importa correctamente el modelo
+const moment = require('moment'); // Importar moment.js
+const Disponibilidad = require('../models/Disponibilidad');
 const router = express.Router();
-const Servicio = require('../models/Services'); // Asegúrate de que la ruta sea correcta
+const Servicio = require('../models/Services');
 
 // Ruta para obtener todas las disponibilidades
 router.get('/', async (req, res) => {
@@ -11,14 +11,14 @@ router.get('/', async (req, res) => {
       include: {
         model: Servicio,
         as: 'servicio',
-        attributes: ['nombre', 'precio'] // Incluye el precio
+        attributes: ['nombre', 'precio']
       }
     });
 
     const formattedDisponibilidades = disponibilidades.map(disp => ({
       id: disp.id,
       servicio_nombre: disp.servicio.nombre,
-      servicio_precio: disp.servicio.precio, // Incluye el precio
+      servicio_precio: disp.servicio.precio,
       fecha_inicio: disp.fecha_inicio,
       fecha_fin: disp.fecha_fin,
       disponible: disp.disponible
@@ -40,14 +40,14 @@ router.get('/servicio/:id', async (req, res) => {
       include: {
         model: Servicio,
         as: 'servicio',
-        attributes: ['nombre', 'precio'] // Incluye el precio
+        attributes: ['nombre', 'precio']
       }
     });
 
     const formattedDisponibilidades = disponibilidades.map(disp => ({
       id: disp.id,
       servicio_nombre: disp.servicio.nombre,
-      servicio_precio: disp.servicio.precio, // Incluye el precio
+      servicio_precio: disp.servicio.precio,
       fecha_inicio: disp.fecha_inicio,
       fecha_fin: disp.fecha_fin,
       disponible: disp.disponible
@@ -63,10 +63,20 @@ router.get('/servicio/:id', async (req, res) => {
 // Ruta para agregar nueva disponibilidad
 router.post('/', async (req, res) => {
   const { servicio_id, fecha_inicio, fecha_fin, disponible } = req.body;
+
   try {
-    console.log('Adding new disponibilidad:', req.body);
-    const nuevaDisponibilidad = await Disponibilidad.create({ servicio_id, fecha_inicio, fecha_fin, disponible });
+    // Restar 3 horas antes de almacenar
+    const fechaInicioUTC = moment(fecha_inicio).subtract(3, 'hours').toISOString();
+    const fechaFinUTC = moment(fecha_fin).subtract(3, 'hours').toISOString();
+    
+    const nuevaDisponibilidad = await Disponibilidad.create({
+      servicio_id,
+      fecha_inicio: fechaInicioUTC,
+      fecha_fin: fechaFinUTC,
+      disponible,
+    });
     console.log('Nueva disponibilidad creada:', nuevaDisponibilidad);
+
     res.status(201).json(nuevaDisponibilidad);
   } catch (error) {
     console.error('Error adding disponibilidad:', error.message);
@@ -74,18 +84,20 @@ router.post('/', async (req, res) => {
   }
 });
 
+
 // Ruta para modificar disponibilidad existente
 router.put('/:id', async (req, res) => {
   const { servicio_id, fecha_inicio, fecha_fin, disponible } = req.body;
   try {
     console.log('Updating disponibilidad:', req.params.id, req.body);
-    const disponibilidad = await Disponibilidad.findAll(req.params.id);
+    const disponibilidad = await Disponibilidad.findByPk(req.params.id); // findByPk para buscar por ID
     if (!disponibilidad) {
       return res.status(404).json({ message: 'Disponibilidad not found' });
     }
+    // Restar 3 horas antes de actualizar
     disponibilidad.servicio_id = servicio_id;
-    disponibilidad.fecha_inicio = fecha_inicio;
-    disponibilidad.fecha_fin = fecha_fin;
+    disponibilidad.fecha_inicio = moment(fecha_inicio).subtract(3, 'hours').toISOString();
+    disponibilidad.fecha_fin = moment(fecha_fin).subtract(3, 'hours').toISOString();
     disponibilidad.disponible = disponible;
     await disponibilidad.save();
     console.log('Disponibilidad actualizada:', disponibilidad);
@@ -110,4 +122,3 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
-
