@@ -1,27 +1,37 @@
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 
-// Crear la carpeta uploads si no existe
-const uploadDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
+// Configuración de almacenamiento de Multer
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    console.log('Saving to:', uploadDir);
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '../uploads/images'); 
     cb(null, uploadDir);
   },
-  filename: (req, file, cb) => {
-    const filename = Date.now() + path.extname(file.originalname);
-    console.log('Filename:', filename);
-    cb(null, filename);
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname)); 
   }
 });
 
-const upload = multer({ storage });
+// Filtros para aceptar solo imágenes
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = /jpeg|jpg|png|gif|webp/;  
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = allowedTypes.test(file.mimetype);
+
+  if (extname && mimetype) {
+    cb(null, true);
+  } else {
+    cb(new Error('Tipo de archivo no permitido'));
+  }
+};
+
+
+// Middleware Multer
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 1024 * 1024 * 5 }, 
+  fileFilter: fileFilter
+});
 
 module.exports = upload;
-
-

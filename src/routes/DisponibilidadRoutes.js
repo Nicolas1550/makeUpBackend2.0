@@ -1,5 +1,5 @@
 const express = require('express');
-const moment = require('moment'); // Importar moment.js
+const moment = require('moment'); 
 const Disponibilidad = require('../models/Disponibilidad');
 const router = express.Router();
 const Servicio = require('../models/Services');
@@ -75,7 +75,6 @@ router.post('/', async (req, res) => {
       fecha_fin: fechaFinUTC,
       disponible,
     });
-    console.log('Nueva disponibilidad creada:', nuevaDisponibilidad);
 
     res.status(201).json(nuevaDisponibilidad);
   } catch (error) {
@@ -89,18 +88,18 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const { servicio_id, fecha_inicio, fecha_fin, disponible } = req.body;
   try {
-    console.log('Updating disponibilidad:', req.params.id, req.body);
-    const disponibilidad = await Disponibilidad.findByPk(req.params.id); // findByPk para buscar por ID
+    
+    const disponibilidad = await Disponibilidad.findByPk(req.params.id);
     if (!disponibilidad) {
       return res.status(404).json({ message: 'Disponibilidad not found' });
     }
-    // Restar 3 horas antes de actualizar
+
     disponibilidad.servicio_id = servicio_id;
     disponibilidad.fecha_inicio = moment(fecha_inicio).subtract(3, 'hours').toISOString();
     disponibilidad.fecha_fin = moment(fecha_fin).subtract(3, 'hours').toISOString();
     disponibilidad.disponible = disponible;
+
     await disponibilidad.save();
-    console.log('Disponibilidad actualizada:', disponibilidad);
     res.json(disponibilidad);
   } catch (error) {
     console.error('Error updating disponibilidad:', error.message);
@@ -108,12 +107,11 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+
 // Ruta para eliminar disponibilidad
 router.delete('/:id', async (req, res) => {
   try {
-    console.log('Deleting disponibilidad:', req.params.id);
     await Disponibilidad.destroy({ where: { id: req.params.id } });
-    console.log('Disponibilidad eliminada:', req.params.id);
     res.json({ message: 'Disponibilidad eliminada' });
   } catch (error) {
     console.error('Error deleting disponibilidad:', error.message);

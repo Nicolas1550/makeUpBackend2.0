@@ -39,25 +39,53 @@ module.exports = function (io) {
   router.put('/admin/orders/:id', authenticate, isAdmin, async (req, res) => {
     const { status } = req.body;
     try {
-      const order = await Order.findByPk(req.params.id);
+      const order = await Order.findByPk(req.params.id, {
+        include: [
+          {
+            model: Disponibilidad,
+            as: 'disponibilidad',
+            include: [{ model: Servicio, as: 'servicio' }]
+          },
+          {
+            model: User,
+            as: 'user',
+            attributes: ['nombre', 'email']
+          }
+        ]
+      });
       if (!order) {
-        console.log(`Orden con ID ${req.params.id} no encontrada`);
         return res.status(404).json({ message: 'Orden no encontrada' });
       }
   
       order.status = status;
       await order.save();
   
-      // Log para emitir el evento WebSocket
-      console.log(`Emitir evento orderUpdated para orden ${order.id} con estado ${status}`);
-      io.emit('orderUpdated', order);
+      // Volver a buscar la orden para incluir los modelos relacionados
+      const updatedOrder = await Order.findByPk(req.params.id, {
+        include: [
+          {
+            model: Disponibilidad,
+            as: 'disponibilidad',
+            include: [{ model: Servicio, as: 'servicio' }]
+          },
+          {
+            model: User,
+            as: 'user',
+            attributes: ['nombre', 'email']
+          }
+        ]
+      });
   
-      res.json(order);
+      // Emitir el evento de WebSocket con la orden actualizada
+      io.emit('orderUpdated', updatedOrder);
+  
+      res.json(updatedOrder);
     } catch (error) {
       console.error('Error actualizando el estado de la orden:', error.message);
       res.status(500).json({ message: 'Error actualizando el estado de la orden' });
     }
   });
+  
   // Ruta para crear una nueva orden
   router.post('/', authenticate, async (req, res) => {
     const { disponibilidad_id, total } = req.body;
