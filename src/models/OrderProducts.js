@@ -9,7 +9,7 @@ const OrderProducts = sequelize.define('OrderProducts', {
   },
 }, {
   timestamps: true,
+  tableName: 'OrderProducts',  // Opcional, pero recomendado para asegurar consistencia en el nombre de la tabla
 });
 
 module.exports = OrderProducts;
-

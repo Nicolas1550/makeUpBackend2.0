@@ -8,7 +8,7 @@ const { MercadoPagoConfig, Preference } = require('mercadopago');
 
 // Configurar Mercado Pago con tu token de acceso
 const mercadoPagoConfig = new MercadoPagoConfig({
-  accessToken: 'TEST-3548564729229334-083118-709ecd2ee32c5dcbd24ba7260cedf546-218527457'
+  accessToken: 'TEST-5877075944185984-091901-b0cdd98592dba39dff23408abc880e97-494022411'
 });
 
 // Crear la instancia de Preference
