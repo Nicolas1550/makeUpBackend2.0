@@ -44,3 +44,4 @@ const ProductOrder = sequelize.define('ProductOrder', {
 });
 
 module.exports = ProductOrder;
+

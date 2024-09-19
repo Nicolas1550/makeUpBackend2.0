@@ -9,12 +9,6 @@ const OrderProducts = sequelize.define('OrderProducts', {
 }, {
   timestamps: true,
   tableName: 'OrderProducts',
-  indexes: [
-    {
-      unique: true,
-      fields: ['ProductId', 'ProductOrderId'],  // Asegura que no haya duplicación de registros
-    },
-  ],
 });
 
 module.exports = OrderProducts;

@@ -26,7 +26,7 @@ const Product = sequelize.define('Product', {
   isFeatured: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
-    defaultValue: false,  
+    defaultValue: false,
   },
 }, {
   timestamps: true,

@@ -59,7 +59,6 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
 };
 
-
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(passport.initialize());
@@ -121,6 +120,9 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3001;
 
-sequelize.sync().then(() => {
+// Sincronizar la base de datos usando { alter: true } para evitar la pérdida de datos
+sequelize.sync({ alter: false }).then(() => {
   server.listen(PORT, () => console.log(`Servidor corriendo en el puerto ${PORT}`));
+}).catch((err) => {
+  console.error('Error al sincronizar la base de datos:', err);
 });

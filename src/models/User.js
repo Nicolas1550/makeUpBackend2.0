@@ -23,7 +23,7 @@ const User = sequelize.define('User', {
     unique: true,
   },
   telefono: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(20),  // Limitar a 20 caracteres
     allowNull: false,
   },
   foto: {
