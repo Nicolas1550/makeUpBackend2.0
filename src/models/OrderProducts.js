@@ -1,4 +1,3 @@
-// models/OrderProducts.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../db');
 
@@ -9,7 +8,13 @@ const OrderProducts = sequelize.define('OrderProducts', {
   },
 }, {
   timestamps: true,
-  tableName: 'OrderProducts',  // Opcional, pero recomendado para asegurar consistencia en el nombre de la tabla
+  tableName: 'OrderProducts',
+  indexes: [
+    {
+      unique: true,
+      fields: ['ProductId', 'ProductOrderId'],  // Asegura que no haya duplicación de registros
+    },
+  ],
 });
 
 module.exports = OrderProducts;

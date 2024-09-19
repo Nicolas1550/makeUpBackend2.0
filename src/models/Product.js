@@ -1,4 +1,3 @@
-// models/Product.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../db');
 
@@ -28,7 +27,7 @@ const Product = sequelize.define('Product', {
     type: DataTypes.BOOLEAN,
     allowNull: false,
     defaultValue: false,  
-  }
+  },
 }, {
   timestamps: true,
 });
