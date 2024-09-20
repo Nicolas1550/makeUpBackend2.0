@@ -172,43 +172,49 @@ router.post('/webhook', async (req, res) => {
     const paymentId = req.body.data?.id || req.query.id;
 
     if (type === 'payment' && paymentId) {
-      // Obtener detalles del pago desde Mercado Pago
-      const paymentInfo = await mercadopago.payment.findById(paymentId);
+      // Obtener detalles del pago desde Mercado Pago usando la configuración `mercadoPagoConfig`
+      const paymentInfo = await preference.payment.findById(paymentId);  // Asegúrate de que preference está bien instanciado
 
       // Verificar si el pago fue aprobado
       if (paymentInfo.body.status === 'approved') {
         const externalReference = paymentInfo.body.external_reference;
         const metadata = paymentInfo.body.metadata;
 
-        if (!metadata || !metadata.products || !metadata.total || !metadata.phone_number) {
+        // Verificar si los metadatos son correctos
+        if (!metadata || !metadata.products || !metadata.total || !metadata.phone_number || !metadata.user_id) {
           console.error('Metadatos faltantes o incorrectos en la respuesta de Mercado Pago:', metadata);
           return res.status(400).json({ error: 'Metadatos faltantes en la respuesta de Mercado Pago' });
         }
 
-        const { phone_number, total, products, shipping_method, address, city } = metadata;
+        // Extraer los datos necesarios de los metadatos
+        const { user_id, phone_number, total, products, shipping_method, address, city } = metadata;
 
         // Conectar a la base de datos y empezar una transacción
         const connection = await pool.getConnection();
         await connection.query('START TRANSACTION');
 
         try {
+          // Crear la orden en la base de datos con el `user_id` recuperado de los metadatos
           const [orderResult] = await connection.query(
             `INSERT INTO productorders (user_id, phone_number, total, shipping_method, payment_method, address, city, status) 
              VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado')`,
-            [req.user.id, phone_number, total, shipping_method, 'mercadopago', address || null, city || null]
+            [user_id, phone_number, total, shipping_method, 'mercadopago', address || null, city || null]
           );
 
           const orderId = orderResult.insertId;
           const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
+          // Insertar los productos asociados a la orden
           for (const product of products) {
             await connection.query(
               'INSERT INTO orderproducts (ProductOrderId, ProductId, quantity, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)',
               [orderId, product.id, product.quantity, now, now]
             );
+            // Actualizar el stock de productos
             await connection.query('UPDATE products SET quantity = quantity - ? WHERE id = ?', [product.quantity, product.id]);
           }
 
+          // Confirmar la transacción
           await connection.query('COMMIT');
           console.log('Orden creada exitosamente después de la aprobación de Mercado Pago.');
           res.status(201).json({ message: 'Orden creada con éxito' });
