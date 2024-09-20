@@ -12,7 +12,8 @@ const path = require('path');
 const fs = require('fs');
 require('express-async-errors');
 
-const { dbConnect } = require('./db'); // Usar dbConnect
+// Ya no es necesario llamar a dbConnect aquí
+const { query } = require('./db'); // Usar solo el query
 
 // Importar rutas
 const authRoutes = require('./routes/AuthRoutes');
@@ -23,23 +24,20 @@ const emailRoutes = require('./routes/EmailRoutes');
 const orderRoutes = require('./routes/OrderRoutes');
 const productOrderRoutes = require('./routes/ProductOrderRoutes');
 
-// Conectar a la base de datos
-dbConnect().catch(err => console.error('Error al conectar a MySQL:', err));
-
 const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = [
   'https://peluqueria-the-best.vercel.app',
   'http://localhost:3000',
-  'http://localhost:3001'
+  'http://localhost:3001',
 ];
 
 // Configurar WebSocket
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], 
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     credentials: true,
   },
 });
@@ -68,17 +66,21 @@ if (!fs.existsSync(uploadDir)) {
 }
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
-app.use(rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1000,
-  standardHeaders: true,
-  legacyHeaders: false,
-}));
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 1000,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
 
 app.use(morgan('tiny'));
 
@@ -86,7 +88,7 @@ app.use(morgan('tiny'));
 const userRoutes = require('./routes/UserRoutes');
 
 // Usar las rutas
-app.use('/api/users', userRoutes(io)); 
+app.use('/api/users', userRoutes(io));
 app.use('/auth', authRoutes);
 app.use('/api/jwt', jwtRoutes);
 app.use('/api/servicios', servicesRoutes(io));

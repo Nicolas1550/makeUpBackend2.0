@@ -139,36 +139,50 @@ module.exports = (io) => {
     }
   });
 
-  // Ruta para obtener los usuarios asignados a un servicio específico
-  router.get('/services/:serviceId/users', async (req, res) => {
-    const { serviceId } = req.params;
+// Ruta para obtener los usuarios asignados a un servicio específico
+router.get('/services/:serviceId/users', async (req, res) => {
+  const { serviceId } = req.params;
 
-    try {
-      // Verificar si el servicio existe
-      const servicioQuery = `SELECT id FROM servicios WHERE id = ?`;
-      const servicio = await query(servicioQuery, [serviceId]);
+  try {
+    // Verificar si el servicio existe
+    const servicioQuery = `SELECT id FROM servicios WHERE id = ?`;
+    const servicio = await query(servicioQuery, [serviceId]);
 
-      if (!servicio.length) {
-        return res.status(404).json({ message: 'Servicio no encontrado.' });
-      }
+    if (!servicio.length) {
+      return res.status(404).json({ message: 'Servicio no encontrado.' });
+    }
 
-      // Obtener los empleados asignados al servicio
-      const usersQuery = `
-      SELECT u.id, u.nombre
+    // Obtener los empleados asignados al servicio, incluyendo toda la información relevante del usuario
+    const usersQuery = `
+      SELECT u.id, u.nombre, u.apellido, u.email, u.telefono, u.foto, GROUP_CONCAT(r.nombre) AS roles
       FROM users u
       JOIN userservices us ON u.id = us.userId  -- Cambiar ServicioId a serviceId
       JOIN user_roles ur ON u.id = ur.UserId
       JOIN roles r ON ur.RoleId = r.id
-      WHERE us.serviceId = ? AND r.nombre = 'empleado'  -- Cambiar ServicioId a serviceId
+      WHERE us.serviceId = ? AND r.nombre = 'empleado'  -- Filtrar por el rol 'empleado'
+      GROUP BY u.id
     `;
-      const users = await query(usersQuery, [serviceId]);
 
-      res.json(users);
-    } catch (error) {
-      console.error('Error fetching service users:', error.message);
-      res.status(500).json({ message: 'Error al obtener los usuarios del servicio' });
-    }
-  });
+    const users = await query(usersQuery, [serviceId]);
+
+    // Mapear la respuesta para incluir los roles como un array y devolver la información completa del usuario
+    const result = users.map(user => ({
+      id: user.id,
+      nombre: user.nombre,
+      apellido: user.apellido,
+      email: user.email,
+      telefono: user.telefono,
+      foto: user.foto,
+      roles: user.roles ? user.roles.split(',') : []  // Convertir los roles en un array
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching service users:', error.message);
+    res.status(500).json({ message: 'Error al obtener los usuarios del servicio' });
+  }
+});
+
 
   // Ruta para obtener un servicio por ID
   router.get('/:id', async (req, res) => {

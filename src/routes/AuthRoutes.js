@@ -30,19 +30,20 @@ const validate = validations => {
 };
 
 // Ruta para registrar un nuevo usuario
+// Ruta para registrar un nuevo usuario
 router.post(
   '/register',
-  upload.single('foto'), 
+  upload.single('foto'),
   validate([
     body('nombre').isString().notEmpty().withMessage('El nombre es obligatorio'),
     body('apellido').isString().notEmpty().withMessage('El apellido es obligatorio'),
     body('email').isEmail().withMessage('Debe ser un correo válido'),
     body('password').isLength({ min: 8 }).withMessage('La contraseña debe tener al menos 8 caracteres'),
-    body('telefono').isString().notEmpty().withMessage('El teléfono es obligatorio'), 
+    body('telefono').isString().notEmpty().withMessage('El teléfono es obligatorio'),
   ]),
   asyncHandler(async (req, res) => {
     const { nombre, apellido, email, password, telefono } = req.body;
-    const foto = req.file ? req.file.filename : null; 
+    const foto = req.file ? req.file.filename : null;
 
     try {
       // Verificar si el usuario ya existe
@@ -58,10 +59,20 @@ router.post(
       const newUserQuery = `
         INSERT INTO users (nombre, apellido, email, password, telefono, foto, createdAt, updatedAt)
         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`;
-      
-      await query(newUserQuery, [nombre, apellido, email, hashedPassword, telefono, foto]);
 
-      res.status(201).json({ message: 'Usuario registrado con éxito' });
+      const result = await query(newUserQuery, [nombre, apellido, email, hashedPassword, telefono, foto]);
+      const newUserId = result.insertId;
+
+      // Buscar el ID del rol "user"
+      const [userRole] = await query('SELECT id FROM roles WHERE nombre = "user"');
+      if (!userRole) {
+        return res.status(500).json({ message: 'El rol "user" no existe en la base de datos' });
+      }
+
+      // Asignar el rol "user" al nuevo usuario
+      await query('INSERT INTO user_roles (UserId, RoleId, createdAt, updatedAt) VALUES (?, ?, NOW(), NOW())', [newUserId, userRole.id]);
+
+      res.status(201).json({ message: 'Usuario registrado con éxito y rol asignado' });
     } catch (error) {
       res.status(500).json({ message: 'Error al registrar el usuario', error: error.message });
     }

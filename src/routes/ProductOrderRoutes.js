@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const passport = require('passport');
-const { query } = require('../db'); // Usamos `query` para SQL puro
+const { query, pool  } = require('../db'); // Usamos `query` para SQL puro
 const upload = require('../middleware/uploadMiddleware');
 const { MercadoPagoConfig, Preference } = require('mercadopago');
 
@@ -171,6 +171,12 @@ router.get('/success', async (req, res) => {
 });
 
 
+// Crear una nueva orden de compra con comprobante de depósito
+
+// Importa la función getConnection desde db.js
+
+
+
 
 // Crear una nueva orden de compra con comprobante de depósito
 router.post('/add',
@@ -178,25 +184,26 @@ router.post('/add',
   upload.single('payment_proof'),
   validateOrder,
   async (req, res) => {
+    const connection = await pool.getConnection(); // Obtener una conexión específica para la transacción
     try {
       const { phone_number, total, products, shipping_method, address, city, payment_method } = req.body;
       const user_id = req.user.id;
       const payment_proof = req.file ? req.file.filename : null;
 
-      // Iniciar una transacción
-      await query('START TRANSACTION');
+      // Iniciar una transacción usando `query`
+      await connection.query('START TRANSACTION');
 
       // Validar stock de productos
       for (const product of products) {
-        const [productRecord] = await query('SELECT * FROM products WHERE id = ? FOR UPDATE', [product.id]);
+        const [productRecord] = await connection.query('SELECT * FROM products WHERE id = ? FOR UPDATE', [product.id]);
         if (!productRecord || productRecord.quantity < product.quantity) {
-          await query('ROLLBACK');
+          await connection.query('ROLLBACK');
           return res.status(400).json({ error: `No hay suficiente stock para el producto ${productRecord?.name || product.id}` });
         }
       }
 
       // Insertar la orden en la tabla productorders
-      const [orderResult] = await query(
+      const [orderResult] = await connection.query(
         `INSERT INTO productorders (user_id, phone_number, total, shipping_method, payment_method, payment_proof, address, city) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [user_id, phone_number, total, shipping_method, payment_method, payment_proof, address || null, city || null]
@@ -204,17 +211,18 @@ router.post('/add',
       const orderId = orderResult.insertId;
 
       // Insertar los productos relacionados con la orden en la tabla orderproducts
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' '); // Generar la fecha actual
       for (const product of products) {
-        await query(
-          'INSERT INTO orderproducts (ProductOrderId, ProductId, quantity) VALUES (?, ?, ?)',
-          [orderId, product.id, product.quantity]
+        await connection.query(
+          'INSERT INTO orderproducts (ProductOrderId, ProductId, quantity, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)',
+          [orderId, product.id, product.quantity, now, now]
         );
         // Actualizar el stock de productos
-        await query('UPDATE products SET quantity = quantity - ? WHERE id = ?', [product.quantity, product.id]);
+        await connection.query('UPDATE products SET quantity = quantity - ? WHERE id = ?', [product.quantity, product.id]);
       }
 
       // Confirmar la transacción
-      await query('COMMIT');
+      await connection.query('COMMIT');
 
       // Devolver los detalles necesarios al frontend
       res.status(201).json({
@@ -225,51 +233,91 @@ router.post('/add',
         }
       });
     } catch (error) {
-      await query('ROLLBACK');
+      await connection.query('ROLLBACK'); // Si hay un error, hacer rollback de la transacción
       console.error('Error al crear la orden:', error);
       res.status(500).json({ error: 'Error interno del servidor' });
+    } finally {
+      connection.release(); // Liberar la conexión
     }
   }
 );
 
+
+
+// Obtener todas las órdenes
 // Obtener todas las órdenes
 // Obtener todas las órdenes
 router.get('/', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
     const userId = req.user.id;
+    const userRoles = req.user.rolesAssociation || [];
 
-    // Asegurarse de que `rolesAssociation` existe y sea un array
-    const userIsAdmin = Array.isArray(req.user.rolesAssociation) && req.user.rolesAssociation.some(role => role.nombre === 'admin');
+    console.log(`ID del usuario: ${userId}`);
+    console.log(`Roles del usuario:`, userRoles);
 
+    // Verifica si el usuario tiene el rol de administrador
+    const userIsAdmin = Array.isArray(userRoles) && userRoles.some(role => role.nombre === 'admin');
+    console.log(`¿El usuario es administrador? ${userIsAdmin}`);
+
+    // Modificamos la consulta para obtener los detalles del usuario
     const queryStr = userIsAdmin
-      ? 'SELECT * FROM productorders'
-      : 'SELECT * FROM productorders WHERE user_id = ?';
+      ? `SELECT po.*, u.nombre as user_name, u.email as user_email 
+         FROM productorders po
+         JOIN users u ON po.user_id = u.id`
+      : `SELECT po.*, u.nombre as user_name, u.email as user_email 
+         FROM productorders po
+         JOIN users u ON po.user_id = u.id 
+         WHERE po.user_id = ?`;
 
+    // Ejecutar la consulta para obtener las órdenes
     const orders = userIsAdmin
       ? await query(queryStr)
       : await query(queryStr, [userId]);
 
-    if (!orders.length) {
+    console.log(`Órdenes obtenidas:`, orders);
+
+    if (!orders || orders.length === 0) {
+      console.log('No se encontraron órdenes.');
       return res.status(404).json({ message: 'No se encontraron órdenes.' });
     }
 
-    // Enriquecer las órdenes con productos y usuarios asociados
+    // Enriquecer las órdenes con los productos asociados
     for (const order of orders) {
-      const [products] = await query('SELECT p.id, p.name, p.price, op.quantity FROM products p JOIN orderproducts op ON p.id = op.ProductId WHERE op.ProductOrderId = ?', [order.id]);
-      order.products = products;
+      const products = await query(`
+        SELECT p.id, p.name, p.price, op.quantity
+        FROM products p
+        JOIN orderproducts op ON p.id = op.ProductId
+        WHERE op.ProductOrderId = ?
+      `, [order.id]);
+
+      console.log(`Productos para la orden ${order.id}:`, products);
+      order.products = products || [];
     }
 
-    // Añadir cabeceras para deshabilitar la caché
+    // Añadir información del usuario y el comprobante de pago en la respuesta final
+    const enrichedOrders = orders.map(order => ({
+      ...order,
+      user: {
+        id: order.user_id,
+        nombre: order.user_name,
+        email: order.user_email
+      },
+      // Asegúrate de incluir el campo payment_proof con la ruta correcta
+      payment_proof: order.payment_proof ? `/uploads/${order.payment_proof}` : null
+    }));
+
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.set('Expires', '0');
     res.set('Surrogate-Control', 'no-store');
 
-    res.status(200).json(orders);
+    console.log(`Enviando órdenes al cliente.`);
+    res.status(200).json(enrichedOrders);
   } catch (error) {
-    console.error('Error al obtener las órdenes:', error);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    console.error('Error al obtener las órdenes:', error.message);
+    res.status(500).json({ message: 'Error interno del servidor.', error: error.message });
   }
 });
+
 
 // Actualizar el estado de una orden
 router.patch('/:id/status',
@@ -285,18 +333,42 @@ router.patch('/:id/status',
     }
 
     try {
+      // Obtener la orden antes de actualizar para validar si existe
       const [order] = await query('SELECT * FROM productorders WHERE id = ?', [id]);
       if (!order) {
         return res.status(404).json({ message: 'Orden no encontrada.' });
       }
 
+      // Actualizar el estado
       await query('UPDATE productorders SET status = ? WHERE id = ?', [status, id]);
-      res.status(200).json({ message: 'Estado de la orden actualizado con éxito.' });
+
+      // Obtener la orden actualizada
+      const [updatedOrder] = await query('SELECT * FROM productorders WHERE id = ?', [id]);
+
+      // Obtener el usuario asociado
+      const [user] = await query('SELECT id, nombre, email FROM users WHERE id = ?', [updatedOrder.user_id]);
+
+      // Obtener los productos asociados a la orden
+      const products = await query(`
+        SELECT p.id, p.name, p.price, op.quantity
+        FROM products p
+        JOIN orderproducts op ON p.id = op.ProductId
+        WHERE op.ProductOrderId = ?
+      `, [updatedOrder.id]);
+
+      // Adjuntar el usuario y los productos a la orden actualizada
+      updatedOrder.user = user || null;
+      updatedOrder.products = products || [];
+
+      // Retornar la orden completa con el usuario y productos asociados
+      res.status(200).json({ order: updatedOrder });
     } catch (error) {
       console.error('Error al actualizar el estado de la orden:', error);
       res.status(500).json({ message: 'Error interno del servidor.' });
     }
   }
 );
+
+
 
 module.exports = router;
