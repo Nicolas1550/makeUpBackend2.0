@@ -170,7 +170,6 @@ router.post('/mercadopago',
 const fetch = require('node-fetch');
 
 // Webhook para recibir notificaciones de Mercado Pago
-// Webhook para recibir notificaciones de Mercado Pago
 router.post('/webhook', async (req, res) => {
   const connection = await pool.getConnection(); // Obtener una conexión específica para la transacción
   try {
@@ -237,8 +236,8 @@ router.post('/webhook', async (req, res) => {
         // Confirmar la transacción
         await connection.query('COMMIT');
         console.log('Orden creada exitosamente después de la aprobación de Mercado Pago.');
-
-        // Enviar respuesta con el mensaje de éxito y la indicación de limpiar el carrito
+        
+        // Responder al frontend con un mensaje claro para limpiar el carrito
         return res.status(201).json({ message: 'Orden creada con éxito, limpiar carrito' });
       } else {
         console.log(`El pago con ID ${paymentId} no fue aprobado. Estado: ${paymentData.status}`);
@@ -256,7 +255,6 @@ router.post('/webhook', async (req, res) => {
     connection.release(); // Liberar la conexión
   }
 });
-
 
 
 
