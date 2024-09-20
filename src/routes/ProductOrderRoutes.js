@@ -167,27 +167,24 @@ router.post('/mercadopago',
 // Webhook para recibir notificaciones de Mercado Pago
 router.post('/webhook', async (req, res) => {
   try {
-    const { type, data } = req.body;
+    // Verificar si `type` y `id` vienen en la query string
+    const type = req.body.type || req.query.topic;
+    const paymentId = req.body.data?.id || req.query.id;
 
-    // Verificar que el tipo de notificación sea sobre un pago
-    if (type === 'payment') {
-      const paymentId = data.id;
-
+    if (type === 'payment' && paymentId) {
       // Obtener detalles del pago desde Mercado Pago
       const paymentInfo = await mercadopago.payment.findById(paymentId);
 
       // Verificar si el pago fue aprobado
       if (paymentInfo.body.status === 'approved') {
         const externalReference = paymentInfo.body.external_reference;
-        const metadata = paymentInfo.body.metadata; // Recuperar los metadatos almacenados
+        const metadata = paymentInfo.body.metadata;
 
-        // Asegurarse de que los metadatos contienen la información necesaria
         if (!metadata || !metadata.products || !metadata.total || !metadata.phone_number) {
           console.error('Metadatos faltantes o incorrectos en la respuesta de Mercado Pago:', metadata);
           return res.status(400).json({ error: 'Metadatos faltantes en la respuesta de Mercado Pago' });
         }
 
-        // Extraer los datos necesarios del metadato
         const { phone_number, total, products, shipping_method, address, city } = metadata;
 
         // Conectar a la base de datos y empezar una transacción
@@ -195,28 +192,23 @@ router.post('/webhook', async (req, res) => {
         await connection.query('START TRANSACTION');
 
         try {
-          // Crear la orden en la base de datos con el estado "aprobado"
           const [orderResult] = await connection.query(
             `INSERT INTO productorders (user_id, phone_number, total, shipping_method, payment_method, address, city, status) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado')`, // Aquí el estado de la orden es "aprobado"
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado')`,
             [req.user.id, phone_number, total, shipping_method, 'mercadopago', address || null, city || null]
           );
 
           const orderId = orderResult.insertId;
-
-          // Insertar los productos asociados a la orden
           const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
           for (const product of products) {
             await connection.query(
               'INSERT INTO orderproducts (ProductOrderId, ProductId, quantity, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)',
               [orderId, product.id, product.quantity, now, now]
             );
-
-            // Actualizar el stock de productos
             await connection.query('UPDATE products SET quantity = quantity - ? WHERE id = ?', [product.quantity, product.id]);
           }
 
-          // Confirmar la transacción
           await connection.query('COMMIT');
           console.log('Orden creada exitosamente después de la aprobación de Mercado Pago.');
           res.status(201).json({ message: 'Orden creada con éxito' });
@@ -228,7 +220,6 @@ router.post('/webhook', async (req, res) => {
           connection.release();
         }
       } else {
-        // Si el estado del pago no es "aprobado", no crear la orden
         console.log(`El pago con ID ${paymentId} no fue aprobado. Estado: ${paymentInfo.body.status}`);
         res.status(200).json({ message: `El pago no fue aprobado. Estado: ${paymentInfo.body.status}` });
       }
