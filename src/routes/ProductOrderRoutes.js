@@ -164,6 +164,7 @@ router.post('/mercadopago',
 // Webhook para recibir notificaciones de Mercado Pago
 // Webhook para recibir notificaciones de Mercado Pago
 // Webhook para recibir notificaciones de Mercado Pago
+// Webhook para recibir notificaciones de Mercado Pago
 router.post('/webhook', async (req, res) => {
   try {
     const { type, data } = req.body;
@@ -179,6 +180,12 @@ router.post('/webhook', async (req, res) => {
       if (paymentInfo.body.status === 'approved') {
         const externalReference = paymentInfo.body.external_reference;
         const metadata = paymentInfo.body.metadata; // Recuperar los metadatos almacenados
+
+        // Asegurarse de que los metadatos contienen la información necesaria
+        if (!metadata || !metadata.products || !metadata.total || !metadata.phone_number) {
+          console.error('Metadatos faltantes o incorrectos en la respuesta de Mercado Pago:', metadata);
+          return res.status(400).json({ error: 'Metadatos faltantes en la respuesta de Mercado Pago' });
+        }
 
         // Extraer los datos necesarios del metadato
         const { phone_number, total, products, shipping_method, address, city } = metadata;
