@@ -13,16 +13,19 @@ const validateProduct = [
     .withMessage('El nombre debe ser una cadena de texto.')
     .notEmpty()
     .withMessage('El nombre es obligatorio.'),
+  
   body('price')
-    .isFloat({ gt: 0 })
-    .withMessage('El precio debe ser un número mayor que 0.')
+    .isFloat({ min: 0 }) // Permite que el precio sea 0 o mayor
+    .withMessage('El precio debe ser un número mayor o igual a 0.')
     .notEmpty()
     .withMessage('El precio es obligatorio.'),
+
   body('quantity')
-    .isInt({ min: 0 })
+    .isInt({ min: 0 }) // Permitir que la cantidad sea 0 o mayor
     .withMessage('La cantidad debe ser un número entero no negativo.')
     .notEmpty()
     .withMessage('La cantidad es obligatoria.'),
+  
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -32,6 +35,7 @@ const validateProduct = [
     next();
   },
 ];
+
 
 // Ruta para agregar productos (solo administradores)
 router.post('/add', 
@@ -82,13 +86,29 @@ router.put('/update/:id',
   passport.authenticate('jwt', { session: false }), 
   isAdmin, 
   upload.single('image'), 
-  (req, res, next) => {
-    if (req.file) {
-      req.body.imageFileName = req.file.filename;
+  async (req, res, next) => {
+    try {
+      const productId = req.params.id;
+
+      // Primero obtenemos el producto actual para mantener la imagen anterior si no se carga una nueva
+      const currentProduct = (await query('SELECT * FROM products WHERE id = ?', [productId]))[0];
+
+      if (!currentProduct) {
+        return res.status(404).json({ message: 'Producto no encontrado' });
+      }
+
+      // Si se carga una nueva imagen, la usamos, si no, mantenemos la imagen anterior
+      const imageFileName = req.file ? req.file.filename : currentProduct.imageFileName;
+
+      req.body.imageFileName = imageFileName;
+      req.body.price = parseFloat(req.body.price);
+      req.body.quantity = parseInt(req.body.quantity, 10);
+
+      next();
+    } catch (error) {
+      console.error('Error al procesar la imagen:', error);
+      res.status(500).json({ error: 'Error interno del servidor' });
     }
-    req.body.price = parseFloat(req.body.price); 
-    req.body.quantity = parseInt(req.body.quantity, 10); 
-    next();
   }, 
   validateProduct, 
   async (req, res) => {
@@ -115,6 +135,7 @@ router.put('/update/:id',
     }
   }
 );
+
 
 // Ruta para eliminar un producto por ID (solo administradores)
 router.delete('/delete/:id', 

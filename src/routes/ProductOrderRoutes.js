@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const passport = require('passport');
-const { query, pool  } = require('../db'); // Usamos `query` para SQL puro
+const { query, pool } = require('../db'); // Usamos `query` para SQL puro
 const upload = require('../middleware/uploadMiddleware');
 const { MercadoPagoConfig, Preference } = require('mercadopago');
 
@@ -15,19 +15,33 @@ const preference = new Preference(mercadoPagoConfig);
 const router = express.Router();
 
 // Middleware de validación para la creación de una orden
+// Middleware de validación para la creación de una orden
 const validateOrder = [
-  body('total').isFloat({ gt: 0 }).withMessage('El total debe ser un número mayor que 0.'),
-  body('phone_number').isString().isLength({ min: 10, max: 15 }).withMessage('El número de teléfono debe ser válido.'),
-  body('shipping_method').isIn(['local_pickup', 'delivery']).withMessage('El método de envío no es válido.'),
-  body('payment_method').isIn(['deposito', 'mercadopago']).withMessage('El método de pago no es válido.'),
+  body('total')
+    .isFloat({ min: 0 }) // Cambiar de `gt: 0` a `min: 0` para permitir valores igual a 0
+    .withMessage('El total debe ser un número mayor o igual que 0.'),
+  body('phone_number')
+    .isString()
+    .isLength({ min: 10, max: 15 })
+    .withMessage('El número de teléfono debe ser válido.'),
+  body('shipping_method')
+    .isIn(['local_pickup', 'delivery'])
+    .withMessage('El método de envío no es válido.'),
+  body('payment_method')
+    .isIn(['deposito', 'mercadopago'])
+    .withMessage('El método de pago no es válido.'),
   body('address')
     .if(body('shipping_method').equals('delivery'))
-    .notEmpty().withMessage('La dirección es requerida cuando el método de envío es a domicilio.')
-    .isString().withMessage('La dirección debe ser una cadena de texto válida.'),
+    .notEmpty()
+    .withMessage('La dirección es requerida cuando el método de envío es a domicilio.')
+    .isString()
+    .withMessage('La dirección debe ser una cadena de texto válida.'),
   body('city')
     .if(body('shipping_method').equals('delivery'))
-    .notEmpty().withMessage('La ciudad es requerida cuando el método de envío es a domicilio.')
-    .isString().withMessage('La ciudad debe ser una cadena de texto válida.'),
+    .notEmpty()
+    .withMessage('La ciudad es requerida cuando el método de envío es a domicilio.')
+    .isString()
+    .withMessage('La ciudad debe ser una cadena de texto válida.'),
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -37,6 +51,7 @@ const validateOrder = [
     next();
   },
 ];
+
 
 // Middleware de validación para actualizar el estado de una orden
 const validateStatus = [
@@ -53,14 +68,28 @@ const validateStatus = [
 ];
 
 // Crear una nueva orden de compra con Mercado Pago
+// Crear una nueva orden de compra con Mercado Pago
 router.post('/mercadopago',
   passport.authenticate('jwt', { session: false }),
   validateOrder,
   async (req, res) => {
     try {
-      const { phone_number, total, products, shipping_method, address, city, payment_method } = req.body;
+      let { phone_number, total, products, shipping_method, address, city } = req.body; // Cambiar `const` por `let`
 
-      // Validar stock de productos y obtener detalles del producto
+      // Verificación condicional para envío a domicilio
+      if (shipping_method === 'delivery') {
+        if (!address || !city) {
+          return res.status(400).json({ error: 'Debe proporcionar dirección y ciudad para el envío a domicilio.' });
+        }
+      } else if (shipping_method === 'local_pickup') {
+        // Si es retiro en local, reasignar address y city a null
+        address = null;
+        city = null;
+      } else {
+        return res.status(400).json({ error: 'Método de envío no válido.' });
+      }
+
+      // Validar stock de productos antes de crear la preferencia
       const productDetails = [];
       for (const product of products) {
         const productQuery = 'SELECT * FROM products WHERE id = ?';
@@ -89,29 +118,36 @@ router.post('/mercadopago',
           email: req.user.email,
         },
         external_reference: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        metadata: {
+          phone_number, // Se incluye el número de teléfono en los metadatos
+          total, // Se incluye el total en los metadatos
+          products, // Se incluyen los productos para recuperarlos en el webhook
+          shipping_method,
+          address,
+          city,
+        },
         back_urls: {
           success: `${req.protocol}://${req.get('host')}/api/productOrders/success`,
           failure: `${req.protocol}://${req.get('host')}/api/productOrders/failure`,
           pending: `${req.protocol}://${req.get('host')}/api/productOrders/pending`,
         },
         auto_return: 'approved',
+        notification_url: `${req.protocol}://${req.get('host')}/api/productOrders/webhook`,
       };
 
+      console.log('Creando preferencia en Mercado Pago...');
       const response = await preference.create({ body: preferenceData });
 
-      if (!response || !response.body) {
-        console.error('Error: La respuesta de Mercado Pago es indefinida o no es un objeto:', response);
-        throw new Error('Respuesta inválida de Mercado Pago.');
-      }
-
-      const initPoint = response.body.init_point || response.body.sandbox_init_point;
+      const initPoint = response.init_point || response.sandbox_init_point;
       if (!initPoint) {
-        console.error('Error: La respuesta de Mercado Pago no contiene un init_point:', response.body);
+        console.error('La respuesta de Mercado Pago no contiene un init_point válido:', response);
         throw new Error('La respuesta de Mercado Pago no contiene un init_point válido.');
       }
 
       // Enviar la URL de redirección al frontend
+      console.log('Enviando URL de redirección a Mercado Pago:', initPoint);
       return res.status(200).json({ init_point: initPoint });
+
     } catch (error) {
       console.error('Error al intentar crear la preferencia en Mercado Pago:', error.message);
       res.status(500).json({ error: 'Error interno del servidor' });
@@ -119,56 +155,87 @@ router.post('/mercadopago',
   }
 );
 
+
+
+
+
 // Éxito de la orden
-router.get('/success', async (req, res) => {
-  const connection = await query.getConnection();
+// Webhook para recibir notificaciones de Mercado Pago
+// Webhook para recibir notificaciones de Mercado Pago
+// Webhook para recibir notificaciones de Mercado Pago
+// Webhook para recibir notificaciones de Mercado Pago
+router.post('/webhook', async (req, res) => {
   try {
-    const { external_reference } = req.query;
+    const { type, data } = req.body;
 
-    // Obtener los datos originales de la orden
-    const originalDataQuery = 'SELECT * FROM productorders WHERE external_reference = ?';
-    const originalData = (await query(originalDataQuery, [external_reference]))[0];
+    // Verificar que el tipo de notificación sea sobre un pago
+    if (type === 'payment') {
+      const paymentId = data.id;
 
-    // Crear la orden de producto
-    const insertOrderQuery = `
-      INSERT INTO productorders (user_id, phone_number, total, shipping_method, payment_method, address, city, status, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, 'mercadopago', ?, ?, 'confirmed', NOW(), NOW())
-    `;
-    const result = await query(insertOrderQuery, [
-      originalData.user_id,
-      originalData.phone_number,
-      originalData.total,
-      originalData.shipping_method,
-      originalData.address,
-      originalData.city,
-    ]);
+      // Obtener detalles del pago desde Mercado Pago
+      const paymentInfo = await mercadopago.payment.findById(paymentId);
 
-    const newOrderId = result.insertId;
+      // Verificar si el pago fue aprobado
+      if (paymentInfo.body.status === 'approved') {
+        const externalReference = paymentInfo.body.external_reference;
+        const metadata = paymentInfo.body.metadata; // Recuperar los metadatos almacenados
 
-    // Insertar los productos asociados a la orden
-    for (const product of originalData.products) {
-      const insertProductOrderQuery = `
-        INSERT INTO orderproducts (ProductOrderId, ProductId, quantity)
-        VALUES (?, ?, ?)
-      `;
-      await query(insertProductOrderQuery, [newOrderId, product.id, product.quantity]);
+        // Extraer los datos necesarios del metadato
+        const { phone_number, total, products, shipping_method, address, city } = metadata;
+
+        // Conectar a la base de datos y empezar una transacción
+        const connection = await pool.getConnection();
+        await connection.query('START TRANSACTION');
+
+        try {
+          // Crear la orden en la base de datos con el estado "aprobado"
+          const [orderResult] = await connection.query(
+            `INSERT INTO productorders (user_id, phone_number, total, shipping_method, payment_method, address, city, status) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado')`, // Aquí el estado de la orden es "aprobado"
+            [req.user.id, phone_number, total, shipping_method, 'mercadopago', address || null, city || null]
+          );
+
+          const orderId = orderResult.insertId;
+
+          // Insertar los productos asociados a la orden
+          const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+          for (const product of products) {
+            await connection.query(
+              'INSERT INTO orderproducts (ProductOrderId, ProductId, quantity, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)',
+              [orderId, product.id, product.quantity, now, now]
+            );
+
+            // Actualizar el stock de productos
+            await connection.query('UPDATE products SET quantity = quantity - ? WHERE id = ?', [product.quantity, product.id]);
+          }
+
+          // Confirmar la transacción
+          await connection.query('COMMIT');
+          console.log('Orden creada exitosamente después de la aprobación de Mercado Pago.');
+          res.status(201).json({ message: 'Orden creada con éxito' });
+        } catch (error) {
+          await connection.query('ROLLBACK');
+          console.error('Error al crear la orden después de la aprobación de Mercado Pago:', error);
+          res.status(500).json({ error: 'Error al crear la orden' });
+        } finally {
+          connection.release();
+        }
+      } else {
+        // Si el estado del pago no es "aprobado", no crear la orden
+        console.log(`El pago con ID ${paymentId} no fue aprobado. Estado: ${paymentInfo.body.status}`);
+        res.status(200).json({ message: `El pago no fue aprobado. Estado: ${paymentInfo.body.status}` });
+      }
+    } else {
+      console.log(`Tipo de notificación no manejado: ${type}`);
+      res.status(200).json({ message: 'Notificación recibida con éxito, pero no se manejó ningún pago.' });
     }
-
-    // Actualizar el stock de los productos
-    for (const product of originalData.products) {
-      const updateStockQuery = 'UPDATE products SET quantity = quantity - ? WHERE id = ?';
-      await query(updateStockQuery, [product.quantity, product.id]);
-    }
-
-    res.redirect('/order/success'); // Redirigir a una página de éxito
   } catch (error) {
-    await connection.rollback();
-    console.error('Error al crear la orden:', error);
-    res.redirect('/order/failure'); // Redirigir a una página de fallo
-  } finally {
-    await connection.release();
+    console.error('Error en el webhook de Mercado Pago:', error.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
+
+
 
 
 // Crear una nueva orden de compra con comprobante de depósito
