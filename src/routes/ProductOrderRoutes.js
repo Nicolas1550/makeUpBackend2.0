@@ -74,7 +74,7 @@ router.post('/mercadopago',
   validateOrder,
   async (req, res) => {
     try {
-      let { phone_number, total, products, shipping_method, address, city } = req.body; // Cambiar `const` por `let`
+      let { phone_number, total, products, shipping_method, address, city } = req.body;
 
       // Verificación condicional para envío a domicilio
       if (shipping_method === 'delivery') {
@@ -119,6 +119,7 @@ router.post('/mercadopago',
         },
         external_reference: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         metadata: {
+          user_id: req.user.id, // Agrega el user_id aquí
           phone_number, // Se incluye el número de teléfono en los metadatos
           total, // Se incluye el total en los metadatos
           products, // Se incluyen los productos para recuperarlos en el webhook
@@ -154,7 +155,6 @@ router.post('/mercadopago',
     }
   }
 );
-
 
 
 
