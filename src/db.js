@@ -1,16 +1,16 @@
-const { Sequelize } = require('sequelize');
+const mysql = require('mysql2/promise');
 require('dotenv').config();
 
-const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
-  host: process.env.DB_HOST,
-  dialect: 'mysql',
-  port: process.env.DB_PORT || 3306,  // Utiliza el puerto proporcionado por Ngrok o el puerto predeterminado de MySQL
-  logging: false,
-});
+let connection;
 
 async function dbConnect() {
   try {
-    await sequelize.authenticate();
+    connection = await mysql.createConnection({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+    });
     console.log('Conexión a MySQL establecida');
   } catch (error) {
     console.error('Error al conectar a MySQL:', error.message);
@@ -18,4 +18,9 @@ async function dbConnect() {
   }
 }
 
-module.exports = { sequelize, dbConnect };
+async function query(sql, params) {
+  const [results] = await connection.execute(sql, params);
+  return results;
+}
+
+module.exports = { dbConnect, query };

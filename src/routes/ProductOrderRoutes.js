@@ -1,9 +1,8 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const passport = require('passport');
-const { ProductOrder, Product, User, OrderProducts } = require('../models/associations');
-const { sequelize } = require('../db');
-const upload = require('../middleware/uploadMiddleware'); 
+const { query } = require('../db'); // Usamos `query` para SQL puro
+const upload = require('../middleware/uploadMiddleware');
 const { MercadoPagoConfig, Preference } = require('mercadopago');
 
 // Configurar Mercado Pago con tu token de acceso
@@ -14,9 +13,6 @@ const mercadoPagoConfig = new MercadoPagoConfig({
 // Crear la instancia de Preference
 const preference = new Preference(mercadoPagoConfig);
 const router = express.Router();
-
-
-
 
 // Middleware de validación para la creación de una orden
 const validateOrder = [
@@ -45,7 +41,7 @@ const validateOrder = [
 // Middleware de validación para actualizar el estado de una orden
 const validateStatus = [
   body('status')
-    .isIn(['pendiente', 'aprobado', 'rechazado']) 
+    .isIn(['pendiente', 'aprobado', 'rechazado'])
     .withMessage('El estado de la orden no es válido.'),
   (req, res, next) => {
     const errors = validationResult(req);
@@ -62,16 +58,18 @@ router.post('/mercadopago',
   validateOrder,
   async (req, res) => {
     try {
-
       const { phone_number, total, products, shipping_method, address, city, payment_method } = req.body;
 
       // Validar stock de productos y obtener detalles del producto
       const productDetails = [];
       for (const product of products) {
-        const productRecord = await Product.findByPk(product.id);
+        const productQuery = 'SELECT * FROM products WHERE id = ?';
+        const productRecord = (await query(productQuery, [product.id]))[0];
+
         if (!productRecord || productRecord.quantity < product.quantity) {
           return res.status(400).json({ error: `No hay suficiente stock para el producto ${productRecord?.name || product.id}` });
         }
+
         productDetails.push({
           id: productRecord.id,
           name: productRecord.name,
@@ -79,7 +77,6 @@ router.post('/mercadopago',
           quantity: product.quantity,
         });
       }
-
 
       // Crear la preferencia de Mercado Pago
       const preferenceData = {
@@ -91,7 +88,7 @@ router.post('/mercadopago',
         payer: {
           email: req.user.email,
         },
-        external_reference: `${Date.now()}-${Math.floor(Math.random() * 1000)}`, 
+        external_reference: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         back_urls: {
           success: `${req.protocol}://${req.get('host')}/api/productOrders/success`,
           failure: `${req.protocol}://${req.get('host')}/api/productOrders/failure`,
@@ -100,84 +97,78 @@ router.post('/mercadopago',
         auto_return: 'approved',
       };
 
-
       const response = await preference.create({ body: preferenceData });
 
-
-      // Validar que response.body exista y tenga el init_point
-      if (!response || typeof response !== 'object') {
+      if (!response || !response.body) {
         console.error('Error: La respuesta de Mercado Pago es indefinida o no es un objeto:', response);
-        throw new Error('Respuesta indefinida o inválida.');
+        throw new Error('Respuesta inválida de Mercado Pago.');
       }
 
-      const responseBody = response.body || response;
-      if (typeof responseBody !== 'object') {
-        console.error('Error: El cuerpo de la respuesta de Mercado Pago es indefinido o no es un objeto:', responseBody);
-        throw new Error('El cuerpo de la respuesta de Mercado Pago es inválido.');
-      }
-
-      const initPoint = responseBody.init_point || responseBody.sandbox_init_point;
+      const initPoint = response.body.init_point || response.body.sandbox_init_point;
       if (!initPoint) {
-        console.error('Error: La respuesta de Mercado Pago no contiene un init_point:', responseBody);
+        console.error('Error: La respuesta de Mercado Pago no contiene un init_point:', response.body);
         throw new Error('La respuesta de Mercado Pago no contiene un init_point válido.');
       }
-
 
       // Enviar la URL de redirección al frontend
       return res.status(200).json({ init_point: initPoint });
     } catch (error) {
-      console.error('Error al intentar crear la preferencia en Mercado Pago:', error.message, '\nStack trace:', error.stack);
+      console.error('Error al intentar crear la preferencia en Mercado Pago:', error.message);
       res.status(500).json({ error: 'Error interno del servidor' });
     }
   }
 );
 
-
-
+// Éxito de la orden
 router.get('/success', async (req, res) => {
-  const t = await sequelize.transaction();
+  const connection = await query.getConnection();
   try {
     const { external_reference } = req.query;
 
-   
-    const originalData = await getOriginalDataByReference(external_reference);
+    // Obtener los datos originales de la orden
+    const originalDataQuery = 'SELECT * FROM productorders WHERE external_reference = ?';
+    const originalData = (await query(originalDataQuery, [external_reference]))[0];
 
-    // Crear la orden solo si el pago fue exitoso
-    const order = await ProductOrder.create({
-      user_id: originalData.user_id,
-      phone_number: originalData.phone_number,
-      total: originalData.total,
-      shipping_method: originalData.shipping_method,
-      payment_method: 'mercadopago',
-      address: originalData.address,
-      city: originalData.city,
-      status: 'confirmed',
-    }, { transaction: t });
+    // Crear la orden de producto
+    const insertOrderQuery = `
+      INSERT INTO productorders (user_id, phone_number, total, shipping_method, payment_method, address, city, status, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, 'mercadopago', ?, ?, 'confirmed', NOW(), NOW())
+    `;
+    const result = await query(insertOrderQuery, [
+      originalData.user_id,
+      originalData.phone_number,
+      originalData.total,
+      originalData.shipping_method,
+      originalData.address,
+      originalData.city,
+    ]);
 
-    // Relacionar la orden con los productos
+    const newOrderId = result.insertId;
+
+    // Insertar los productos asociados a la orden
     for (const product of originalData.products) {
-      await OrderProducts.create({
-        ProductOrderId: order.id,
-        ProductId: product.id,
-        quantity: product.quantity
-      }, { transaction: t });
+      const insertProductOrderQuery = `
+        INSERT INTO orderproducts (ProductOrderId, ProductId, quantity)
+        VALUES (?, ?, ?)
+      `;
+      await query(insertProductOrderQuery, [newOrderId, product.id, product.quantity]);
     }
 
-    // Actualizar stock de productos
+    // Actualizar el stock de los productos
     for (const product of originalData.products) {
-      const productRecord = await Product.findByPk(product.id, { transaction: t });
-      await productRecord.update({ quantity: productRecord.quantity - product.quantity }, { transaction: t });
+      const updateStockQuery = 'UPDATE products SET quantity = quantity - ? WHERE id = ?';
+      await query(updateStockQuery, [product.quantity, product.id]);
     }
 
-    await t.commit();
-    res.redirect('/order/success'); // Redirigir a una página de éxito en tu frontend
+    res.redirect('/order/success'); // Redirigir a una página de éxito
   } catch (error) {
-    await t.rollback();
+    await connection.rollback();
     console.error('Error al crear la orden:', error);
-    res.redirect('/order/failure'); // Redirigir a una página de fallo en tu frontend
+    res.redirect('/order/failure'); // Redirigir a una página de fallo
+  } finally {
+    await connection.release();
   }
 });
-
 
 
 
@@ -187,141 +178,100 @@ router.post('/add',
   upload.single('payment_proof'),
   validateOrder,
   async (req, res) => {
-    const t = await sequelize.transaction();
     try {
       const { phone_number, total, products, shipping_method, address, city, payment_method } = req.body;
       const user_id = req.user.id;
-      const user_email = req.user.email; 
-      const user_name = req.user.nombre; 
+      const payment_proof = req.file ? req.file.filename : null;
 
-
+      // Iniciar una transacción
+      await query('START TRANSACTION');
 
       // Validar stock de productos
       for (const product of products) {
-        const productRecord = await Product.findByPk(product.id, { transaction: t });
+        const [productRecord] = await query('SELECT * FROM products WHERE id = ? FOR UPDATE', [product.id]);
         if (!productRecord || productRecord.quantity < product.quantity) {
-          await t.rollback();
+          await query('ROLLBACK');
           return res.status(400).json({ error: `No hay suficiente stock para el producto ${productRecord?.name || product.id}` });
         }
       }
 
-      // Crear la orden
-      const orderData = {
-        user_id,
-        phone_number,
-        total,
-        shipping_method,
-        payment_method,
-        payment_proof: req.file ? req.file.filename : null,
-        address: shipping_method === 'delivery' ? address : null,
-        city: shipping_method === 'delivery' ? city : null
-      };
+      // Insertar la orden en la tabla productorders
+      const [orderResult] = await query(
+        `INSERT INTO productorders (user_id, phone_number, total, shipping_method, payment_method, payment_proof, address, city) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [user_id, phone_number, total, shipping_method, payment_method, payment_proof, address || null, city || null]
+      );
+      const orderId = orderResult.insertId;
 
-
-      const order = await ProductOrder.create(orderData, { transaction: t });
-
-
-      // Relacionar la orden con los productos
+      // Insertar los productos relacionados con la orden en la tabla orderproducts
       for (const product of products) {
-        await OrderProducts.create({
-          ProductOrderId: order.id,
-          ProductId: product.id,
-          quantity: product.quantity
-        }, { transaction: t });
+        await query(
+          'INSERT INTO orderproducts (ProductOrderId, ProductId, quantity) VALUES (?, ?, ?)',
+          [orderId, product.id, product.quantity]
+        );
+        // Actualizar el stock de productos
+        await query('UPDATE products SET quantity = quantity - ? WHERE id = ?', [product.quantity, product.id]);
       }
 
-      await t.commit();
+      // Confirmar la transacción
+      await query('COMMIT');
 
       // Devolver los detalles necesarios al frontend
       res.status(201).json({
         message: 'Orden creada con éxito',
         order: {
-          id: order.id,
-          user_email,
-          user_name,
-          total
+          id: orderId,
+          total,
         }
       });
-
     } catch (error) {
-      await t.rollback();
+      await query('ROLLBACK');
       console.error('Error al crear la orden:', error);
       res.status(500).json({ error: 'Error interno del servidor' });
     }
   }
 );
 
-
-
+// Obtener todas las órdenes
+// Obtener todas las órdenes
 router.get('/', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
-    
-    let orders;
+    const userId = req.user.id;
 
-    if (req.user.rolesAssociation.some(role => role.nombre === 'admin')) {
-      orders = await ProductOrder.findAll({
-        include: [
-          {
-            model: Product,
-            as: 'orderProductsAssociation', 
-            attributes: ['id', 'name', 'price'],
-            through: { attributes: ['quantity'] }, 
-          },
-          {
-            model: User,
-            as: 'userOrderAssociation', 
-            attributes: ['id', 'nombre', 'email'],
-          },
-        ],
-      });
-    } else {
-      orders = await ProductOrder.findAll({
-        where: {
-          user_id: req.user.id
-        },
-        include: [
-          {
-            model: Product,
-            as: 'orderProductsAssociation',
-            attributes: ['id', 'name', 'price'],
-            through: { attributes: ['quantity'] },
-          },
-          {
-            model: User,
-            as: 'userOrderAssociation',
-            attributes: ['id', 'nombre', 'email'],
-          },
-        ],
-      });
-    }
+    // Asegurarse de que `rolesAssociation` existe y sea un array
+    const userIsAdmin = Array.isArray(req.user.rolesAssociation) && req.user.rolesAssociation.some(role => role.nombre === 'admin');
 
+    const queryStr = userIsAdmin
+      ? 'SELECT * FROM productorders'
+      : 'SELECT * FROM productorders WHERE user_id = ?';
+
+    const orders = userIsAdmin
+      ? await query(queryStr)
+      : await query(queryStr, [userId]);
 
     if (!orders.length) {
       return res.status(404).json({ message: 'No se encontraron órdenes.' });
     }
 
-    // Verificar si los productos están correctamente relacionados
-    orders.forEach(order => {
-      order.orderProductsAssociation.forEach(product => {
-      });
-    });
+    // Enriquecer las órdenes con productos y usuarios asociados
+    for (const order of orders) {
+      const [products] = await query('SELECT p.id, p.name, p.price, op.quantity FROM products p JOIN orderproducts op ON p.id = op.ProductId WHERE op.ProductOrderId = ?', [order.id]);
+      order.products = products;
+    }
 
-    // Incluir el comprobante de pago en la respuesta
-    const ordersWithProof = orders.map(order => ({
-      ...order.get({ plain: true }),
-      payment_proof_url: order.payment_proof ? `${req.protocol}://${req.get('host')}/uploads/images/${order.payment_proof}` : null
-    }));
+    // Añadir cabeceras para deshabilitar la caché
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Expires', '0');
+    res.set('Surrogate-Control', 'no-store');
 
-
-    res.status(200).json(ordersWithProof);
+    res.status(200).json(orders);
   } catch (error) {
     console.error('Error al obtener las órdenes:', error);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 });
 
-
-
+// Actualizar el estado de una orden
 router.patch('/:id/status',
   passport.authenticate('jwt', { session: false }),
   validateStatus,
@@ -329,22 +279,19 @@ router.patch('/:id/status',
     const { id } = req.params;
     const { status } = req.body;
 
-    // Solo permite que los administradores cambien el estado
-    if (req.user.role !== 'admin') {
+    // Solo los administradores pueden cambiar el estado
+    if (!req.user.rolesAssociation.some(role => role.nombre === 'admin')) {
       return res.status(403).json({ message: 'No tienes permiso para realizar esta acción.' });
     }
 
     try {
-      const order = await ProductOrder.findByPk(id);
-
+      const [order] = await query('SELECT * FROM productorders WHERE id = ?', [id]);
       if (!order) {
         return res.status(404).json({ message: 'Orden no encontrada.' });
       }
 
-      order.status = status;
-      await order.save();
-
-      res.status(200).json({ message: 'Estado de la orden actualizado con éxito.', order });
+      await query('UPDATE productorders SET status = ? WHERE id = ?', [status, id]);
+      res.status(200).json({ message: 'Estado de la orden actualizado con éxito.' });
     } catch (error) {
       console.error('Error al actualizar el estado de la orden:', error);
       res.status(500).json({ message: 'Error interno del servidor.' });

@@ -12,13 +12,12 @@ const path = require('path');
 const fs = require('fs');
 require('express-async-errors');
 
-const { dbConnect, sequelize } = require('./db');
+const { dbConnect } = require('./db'); // Usar dbConnect
 
 // Importar rutas
 const authRoutes = require('./routes/AuthRoutes');
 const jwtRoutes = require('./routes/JwtRoutes');
 const productRoutes = require('./routes/ProductRoutes');
-const disponibilidadRoutes = require('./routes/DisponibilidadRoutes');
 const servicesRoutes = require('./routes/ServicesRoutes');
 const emailRoutes = require('./routes/EmailRoutes');
 const orderRoutes = require('./routes/OrderRoutes');
@@ -90,7 +89,6 @@ const userRoutes = require('./routes/UserRoutes');
 app.use('/api/users', userRoutes(io)); 
 app.use('/auth', authRoutes);
 app.use('/api/jwt', jwtRoutes);
-app.use('/api/disponibilidades', disponibilidadRoutes);
 app.use('/api/servicios', servicesRoutes(io));
 app.use('/api/email', emailRoutes);
 app.use('/api/orders', orderRoutes(io));
@@ -119,10 +117,4 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3001;
-
-// Sincronizar la base de datos usando { alter: true } para evitar la pérdida de datos
-sequelize.sync({ alter: false }).then(() => {
-  server.listen(PORT, () => console.log(`Servidor corriendo en el puerto ${PORT}`));
-}).catch((err) => {
-  console.error('Error al sincronizar la base de datos:', err);
-});
+server.listen(PORT, () => console.log(`Servidor corriendo en el puerto ${PORT}`));

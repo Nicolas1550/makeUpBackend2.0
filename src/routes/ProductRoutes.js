@@ -2,9 +2,9 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const passport = require('passport');
 const isAdmin = require('../middleware/IsAdmin');
-const Product = require('../models/Product');
 const upload = require('../middleware/uploadMiddleware');
 const router = express.Router();
+const { query } = require('../db');  // Conexión a MySQL
 
 // Middleware de validación para productos
 const validateProduct = [
@@ -40,9 +40,8 @@ router.post('/add',
   upload.single('image'), 
   (req, res, next) => {
     if (req.file) {
-    } else {
+      req.body.imageFileName = req.file.filename;
     }
-
     req.body.price = parseFloat(req.body.price); 
     req.body.quantity = parseInt(req.body.quantity, 10); 
     next();
@@ -50,13 +49,15 @@ router.post('/add',
   validateProduct, 
   async (req, res) => {
     try {
-      const productData = {
-        ...req.body,
-        imageFileName: req.file ? req.file.filename : null 
-      };
+      const { name, price, quantity, imageFileName } = req.body;
 
-      const product = await Product.create(productData);
-      res.status(201).json({ message: 'Producto agregado con éxito', product });
+      const productQuery = `
+        INSERT INTO products (name, price, quantity, imageFileName, createdAt, updatedAt) 
+        VALUES (?, ?, ?, ?, NOW(), NOW())
+      `;
+      await query(productQuery, [name, price, quantity, imageFileName]);
+
+      res.status(201).json({ message: 'Producto agregado con éxito' });
     } catch (error) {
       console.error('Error al agregar el producto:', error);
       res.status(500).json({ error: 'Error interno del servidor' });
@@ -67,7 +68,8 @@ router.post('/add',
 // Ruta para obtener todos los productos
 router.get('/', async (req, res) => {
   try {
-    const products = await Product.findAll();
+    const productsQuery = 'SELECT * FROM products';
+    const products = await query(productsQuery);
     res.status(200).json(products);
   } catch (error) {
     console.error('Error al obtener productos:', error);
@@ -82,9 +84,8 @@ router.put('/update/:id',
   upload.single('image'), 
   (req, res, next) => {
     if (req.file) {
-    } else {
+      req.body.imageFileName = req.file.filename;
     }
-
     req.body.price = parseFloat(req.body.price); 
     req.body.quantity = parseInt(req.body.quantity, 10); 
     next();
@@ -92,17 +93,19 @@ router.put('/update/:id',
   validateProduct, 
   async (req, res) => {
     try {
-      const updateData = {
-        ...req.body,
-        ...(req.file && { imageFileName: req.file.filename }) 
-      };
+      const { name, price, quantity, imageFileName } = req.body;
+      const productId = req.params.id;
 
-      const [updated] = await Product.update(updateData, {
-        where: { id: req.params.id }
-      });
-      if (updated) {
-        const updatedProduct = await Product.findOne({ where: { id: req.params.id } });
-        res.status(200).json({ message: 'Producto actualizado con éxito', product: updatedProduct });
+      const updateProductQuery = `
+        UPDATE products 
+        SET name = ?, price = ?, quantity = ?, imageFileName = ?, updatedAt = NOW() 
+        WHERE id = ?
+      `;
+      const result = await query(updateProductQuery, [name, price, quantity, imageFileName, productId]);
+
+      if (result.affectedRows > 0) {
+        const updatedProduct = await query('SELECT * FROM products WHERE id = ?', [productId]);
+        res.status(200).json({ message: 'Producto actualizado con éxito', product: updatedProduct[0] });
       } else {
         res.status(404).json({ message: 'Producto no encontrado' });
       }
@@ -119,10 +122,12 @@ router.delete('/delete/:id',
   isAdmin, 
   async (req, res) => {
     try {
-      const deleted = await Product.destroy({
-        where: { id: req.params.id }
-      });
-      if (deleted) {
+      const productId = req.params.id;
+
+      const deleteProductQuery = 'DELETE FROM products WHERE id = ?';
+      const result = await query(deleteProductQuery, [productId]);
+
+      if (result.affectedRows > 0) {
         res.status(200).json({ message: 'Producto eliminado con éxito' });
       } else {
         res.status(404).json({ message: 'Producto no encontrado' });
@@ -133,11 +138,12 @@ router.delete('/delete/:id',
     }
   }
 );
+
+// Ruta para obtener productos destacados
 router.get('/featured', async (req, res) => {
   try {
-    const featuredProducts = await Product.findAll({
-      where: { isFeatured: true }
-    });
+    const featuredProductsQuery = 'SELECT * FROM products WHERE isFeatured = true';
+    const featuredProducts = await query(featuredProductsQuery);
     res.status(200).json(featuredProducts);
   } catch (error) {
     console.error('Error al obtener productos destacados:', error);
@@ -151,14 +157,15 @@ router.put('/featured/:id',
   isAdmin, 
   async (req, res) => {
     try {
-      const { isFeatured } = req.body;  
-      const [updated] = await Product.update({ isFeatured }, {
-        where: { id: req.params.id }
-      });
+      const { isFeatured } = req.body;
+      const productId = req.params.id;
 
-      if (updated) {
-        const updatedProduct = await Product.findOne({ where: { id: req.params.id } });
-        res.status(200).json({ message: 'Producto actualizado como destacado', product: updatedProduct });
+      const updateFeaturedQuery = 'UPDATE products SET isFeatured = ?, updatedAt = NOW() WHERE id = ?';
+      const result = await query(updateFeaturedQuery, [isFeatured, productId]);
+
+      if (result.affectedRows > 0) {
+        const updatedProduct = await query('SELECT * FROM products WHERE id = ?', [productId]);
+        res.status(200).json({ message: 'Producto actualizado como destacado', product: updatedProduct[0] });
       } else {
         res.status(404).json({ message: 'Producto no encontrado' });
       }
@@ -168,19 +175,21 @@ router.put('/featured/:id',
     }
   }
 );
+
 // Quitar un producto del carrusel de ofertas (solo administradores)
 router.put('/unfeature/:id', 
   passport.authenticate('jwt', { session: false }), 
   isAdmin, 
   async (req, res) => {
     try {
-      const [updated] = await Product.update({ isFeatured: false }, {
-        where: { id: req.params.id }
-      });
+      const productId = req.params.id;
 
-      if (updated) {
-        const updatedProduct = await Product.findOne({ where: { id: req.params.id } });
-        res.status(200).json({ message: 'Producto removido del carrusel de ofertas', product: updatedProduct });
+      const updateUnfeatureQuery = 'UPDATE products SET isFeatured = false, updatedAt = NOW() WHERE id = ?';
+      const result = await query(updateUnfeatureQuery, [productId]);
+
+      if (result.affectedRows > 0) {
+        const updatedProduct = await query('SELECT * FROM products WHERE id = ?', [productId]);
+        res.status(200).json({ message: 'Producto removido del carrusel de ofertas', product: updatedProduct[0] });
       } else {
         res.status(404).json({ message: 'Producto no encontrado' });
       }
@@ -192,3 +201,4 @@ router.put('/unfeature/:id',
 );
 
 module.exports = router;
+

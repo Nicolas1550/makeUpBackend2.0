@@ -5,8 +5,7 @@ const { body, validationResult } = require('express-validator');
 const multer = require('multer'); 
 const path = require('path');
 const router = express.Router();
-const User = require('../models/User');
-const Role = require('../models/Role');  
+const { query } = require('../db'); // Usa la conexión directa a la base de datos
 
 require('dotenv').config();
 
@@ -47,7 +46,7 @@ router.post(
 
     try {
       // Verificar si el usuario ya existe
-      const existingUser = await User.findOne({ where: { email } });
+      const [existingUser] = await query('SELECT * FROM users WHERE email = ?', [email]);
       if (existingUser) {
         return res.status(400).json({ message: 'El usuario ya existe' });
       }
@@ -56,16 +55,13 @@ router.post(
       const hashedPassword = await bcrypt.hash(password, 10);
 
       // Crear un nuevo usuario con los datos proporcionados
-      const newUser = await User.create({
-        nombre,
-        apellido,
-        email,
-        password: hashedPassword,
-        telefono,
-        foto, 
-      });
+      const newUserQuery = `
+        INSERT INTO users (nombre, apellido, email, password, telefono, foto, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`;
+      
+      await query(newUserQuery, [nombre, apellido, email, hashedPassword, telefono, foto]);
 
-      res.status(201).json({ message: 'Usuario registrado con éxito', user: newUser });
+      res.status(201).json({ message: 'Usuario registrado con éxito' });
     } catch (error) {
       res.status(500).json({ message: 'Error al registrar el usuario', error: error.message });
     }
@@ -83,16 +79,16 @@ router.post(
     const { email, password } = req.body;
 
     try {
-      // Buscar el usuario por su correo electrónico, incluyendo los roles con el alias correcto
-      const user = await User.findOne({ 
-        where: { email },
-        include: {
-          model: Role, 
-          as: 'rolesAssociation', 
-          attributes: ['id', 'nombre']
-        }
-      });
+      // Buscar el usuario por su correo electrónico
+      const userQuery = `
+        SELECT u.*, GROUP_CONCAT(r.nombre) as roles
+        FROM users u
+        LEFT JOIN user_roles ur ON u.id = ur.UserId
+        LEFT JOIN roles r ON ur.RoleId = r.id
+        WHERE u.email = ?
+        GROUP BY u.id`;
 
+      const [user] = await query(userQuery, [email]);
 
       if (!user || !(await bcrypt.compare(password, user.password))) {
         return res.status(401).json({ message: 'Credenciales inválidas' });
@@ -101,7 +97,7 @@ router.post(
       // Generar el token JWT
       const token = jwt.sign({ sub: user.id }, process.env.JWT_SECRET, { expiresIn: '24h' });
 
-      // Devolver el token y los datos del usuario, incluyendo los roles
+      // Devolver el token y los datos del usuario
       res.json({
         token,
         user: {
@@ -111,7 +107,7 @@ router.post(
           email: user.email,
           telefono: user.telefono,
           foto: user.foto,
-          roles: user.rolesAssociation 
+          roles: user.roles ? user.roles.split(',') : [] // Convertir los roles en un array
         }
       });
     } catch (error) {
@@ -120,6 +116,5 @@ router.post(
     }
   })
 );
-
 
 module.exports = router;
