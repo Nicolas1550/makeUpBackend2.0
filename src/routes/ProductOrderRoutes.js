@@ -165,19 +165,20 @@ router.post('/mercadopago',
 // Webhook para recibir notificaciones de Mercado Pago
 // Webhook para recibir notificaciones de Mercado Pago
 // Webhook para recibir notificaciones de Mercado Pago
+// Webhook para recibir notificaciones de Mercado Pago
 router.post('/webhook', async (req, res) => {
+  const connection = await pool.getConnection(); // Obtener una conexión específica para la transacción
   try {
     // Verificar si `type` y `id` vienen en la query string
     const type = req.body.type || req.query.topic;
     const paymentId = req.body.data?.id || req.query.id;
 
     if (type === 'payment' && paymentId) {
-      // Obtener detalles del pago desde Mercado Pago usando la configuración `mercadoPagoConfig`
-      const paymentInfo = await preference.payment.findById(paymentId);  // Asegúrate de que preference está bien instanciado
+      // Obtener detalles del pago desde Mercado Pago
+      const paymentInfo = await preference.payment.findById(paymentId);
 
       // Verificar si el pago fue aprobado
       if (paymentInfo.body.status === 'approved') {
-        const externalReference = paymentInfo.body.external_reference;
         const metadata = paymentInfo.body.metadata;
 
         // Verificar si los metadatos son correctos
@@ -189,55 +190,58 @@ router.post('/webhook', async (req, res) => {
         // Extraer los datos necesarios de los metadatos
         const { user_id, phone_number, total, products, shipping_method, address, city } = metadata;
 
-        // Conectar a la base de datos y empezar una transacción
-        const connection = await pool.getConnection();
+        // Iniciar una transacción usando `query`
         await connection.query('START TRANSACTION');
 
-        try {
-          // Crear la orden en la base de datos con el `user_id` recuperado de los metadatos
-          const [orderResult] = await connection.query(
-            `INSERT INTO productorders (user_id, phone_number, total, shipping_method, payment_method, address, city, status) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado')`,
-            [user_id, phone_number, total, shipping_method, 'mercadopago', address || null, city || null]
-          );
-
-          const orderId = orderResult.insertId;
-          const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
-          // Insertar los productos asociados a la orden
-          for (const product of products) {
-            await connection.query(
-              'INSERT INTO orderproducts (ProductOrderId, ProductId, quantity, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)',
-              [orderId, product.id, product.quantity, now, now]
-            );
-            // Actualizar el stock de productos
-            await connection.query('UPDATE products SET quantity = quantity - ? WHERE id = ?', [product.quantity, product.id]);
+        // Validar stock de productos
+        for (const product of products) {
+          const [productRecord] = await connection.query('SELECT * FROM products WHERE id = ? FOR UPDATE', [product.id]);
+          if (!productRecord || productRecord.quantity < product.quantity) {
+            await connection.query('ROLLBACK');
+            return res.status(400).json({ error: `No hay suficiente stock para el producto ${productRecord?.name || product.id}` });
           }
-
-          // Confirmar la transacción
-          await connection.query('COMMIT');
-          console.log('Orden creada exitosamente después de la aprobación de Mercado Pago.');
-          res.status(201).json({ message: 'Orden creada con éxito' });
-        } catch (error) {
-          await connection.query('ROLLBACK');
-          console.error('Error al crear la orden después de la aprobación de Mercado Pago:', error);
-          res.status(500).json({ error: 'Error al crear la orden' });
-        } finally {
-          connection.release();
         }
+
+        // Insertar la orden en la tabla productorders
+        const [orderResult] = await connection.query(
+          `INSERT INTO productorders (user_id, phone_number, total, shipping_method, payment_method, address, city, status) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado')`,  // Estado "aprobado" por el pago de Mercado Pago
+          [user_id, phone_number, total, shipping_method, 'mercadopago', address || null, city || null]
+        );
+        const orderId = orderResult.insertId;
+
+        // Insertar los productos relacionados con la orden en la tabla orderproducts
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' '); // Generar la fecha actual
+        for (const product of products) {
+          await connection.query(
+            'INSERT INTO orderproducts (ProductOrderId, ProductId, quantity, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)',
+            [orderId, product.id, product.quantity, now, now]
+          );
+          // Actualizar el stock de productos
+          await connection.query('UPDATE products SET quantity = quantity - ? WHERE id = ?', [product.quantity, product.id]);
+        }
+
+        // Confirmar la transacción
+        await connection.query('COMMIT');
+        console.log('Orden creada exitosamente después de la aprobación de Mercado Pago.');
+        return res.status(201).json({ message: 'Orden creada con éxito' });
       } else {
         console.log(`El pago con ID ${paymentId} no fue aprobado. Estado: ${paymentInfo.body.status}`);
-        res.status(200).json({ message: `El pago no fue aprobado. Estado: ${paymentInfo.body.status}` });
+        return res.status(200).json({ message: `El pago no fue aprobado. Estado: ${paymentInfo.body.status}` });
       }
     } else {
       console.log(`Tipo de notificación no manejado: ${type}`);
-      res.status(200).json({ message: 'Notificación recibida con éxito, pero no se manejó ningún pago.' });
+      return res.status(200).json({ message: 'Notificación recibida con éxito, pero no se manejó ningún pago.' });
     }
   } catch (error) {
+    await connection.query('ROLLBACK');
     console.error('Error en el webhook de Mercado Pago:', error.message);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  } finally {
+    connection.release(); // Liberar la conexión
   }
 });
+
 
 
 
