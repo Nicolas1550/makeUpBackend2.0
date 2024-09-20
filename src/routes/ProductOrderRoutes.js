@@ -258,7 +258,35 @@ router.post('/webhook', async (req, res) => {
 
 
 
+// Endpoint para verificar el estado del pago después de la redirección de Mercado Pago
+router.get('/check-payment-status', async (req, res) => {
+  try {
+    const paymentId = req.query.payment_id; // Obtener el ID de pago de la query string
+    if (!paymentId) {
+      return res.status(400).json({ error: 'Falta el ID de pago' });
+    }
 
+    // Hacer una solicitud a la API de Mercado Pago para obtener el estado del pago
+    const paymentUrl = `https://api.mercadopago.com/v1/payments/${paymentId}`;
+    const paymentInfo = await fetch(paymentUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${mercadoPagoConfig.accessToken}`,
+      },
+    });
+
+    const paymentData = await paymentInfo.json();
+
+    if (paymentData.status === 'approved') {
+      return res.status(200).json({ paymentApproved: true });
+    } else {
+      return res.status(200).json({ paymentApproved: false });
+    }
+  } catch (error) {
+    console.error('Error al verificar el estado del pago:', error);
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
 
 // Crear una nueva orden de compra con comprobante de depósito
 
