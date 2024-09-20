@@ -121,8 +121,8 @@ router.post('/mercadopago',
         metadata: {
           user_id: req.user.id, // Agrega el user_id aquí
           phone_number, // Se incluye el número de teléfono en los metadatos
-          total, // Se incluye el total en los metadatos
-          products, // Se incluyen los productos para recuperarlos en el webhook
+          total,       // Se incluye el total en los metadatos
+          products,    // Se incluyen los productos para recuperarlos en el webhook
           shipping_method,
           address,
           city,
@@ -139,6 +139,7 @@ router.post('/mercadopago',
       console.log('Creando preferencia en Mercado Pago...');
       const response = await preference.create({ body: preferenceData });
 
+      // Ahora accedemos directamente a response.init_point y response.sandbox_init_point
       const initPoint = response.init_point || response.sandbox_init_point;
       if (!initPoint) {
         console.error('La respuesta de Mercado Pago no contiene un init_point válido:', response);
@@ -155,7 +156,6 @@ router.post('/mercadopago',
     }
   }
 );
-
 
 
 
