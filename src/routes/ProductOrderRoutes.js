@@ -165,6 +165,11 @@ router.post('/mercadopago',
 // Webhook para recibir notificaciones de Mercado Pago
 // Webhook para recibir notificaciones de Mercado Pago
 // Webhook para recibir notificaciones de Mercado Pago
+
+// Webhook para recibir notificaciones de Mercado Pago
+const fetch = require('node-fetch');
+
+// Webhook para recibir notificaciones de Mercado Pago
 // Webhook para recibir notificaciones de Mercado Pago
 router.post('/webhook', async (req, res) => {
   const connection = await pool.getConnection(); // Obtener una conexión específica para la transacción
@@ -174,12 +179,20 @@ router.post('/webhook', async (req, res) => {
     const paymentId = req.body.data?.id || req.query.id;
 
     if (type === 'payment' && paymentId) {
-      // Obtener detalles del pago desde Mercado Pago
-      const paymentInfo = await preference.payment.findById(paymentId);
+      // Hacer una solicitud HTTP a Mercado Pago para obtener los detalles del pago
+      const paymentUrl = `https://api.mercadopago.com/v1/payments/${paymentId}`;
+      const paymentInfo = await fetch(paymentUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${mercadoPagoConfig.accessToken}`, // Usa el accessToken configurado
+        },
+      });
+
+      const paymentData = await paymentInfo.json();
 
       // Verificar si el pago fue aprobado
-      if (paymentInfo.body.status === 'approved') {
-        const metadata = paymentInfo.body.metadata;
+      if (paymentData.status === 'approved') {
+        const metadata = paymentData.metadata;
 
         // Verificar si los metadatos son correctos
         if (!metadata || !metadata.products || !metadata.total || !metadata.phone_number || !metadata.user_id) {
@@ -226,8 +239,8 @@ router.post('/webhook', async (req, res) => {
         console.log('Orden creada exitosamente después de la aprobación de Mercado Pago.');
         return res.status(201).json({ message: 'Orden creada con éxito' });
       } else {
-        console.log(`El pago con ID ${paymentId} no fue aprobado. Estado: ${paymentInfo.body.status}`);
-        return res.status(200).json({ message: `El pago no fue aprobado. Estado: ${paymentInfo.body.status}` });
+        console.log(`El pago con ID ${paymentId} no fue aprobado. Estado: ${paymentData.status}`);
+        return res.status(200).json({ message: `El pago no fue aprobado. Estado: ${paymentData.status}` });
       }
     } else {
       console.log(`Tipo de notificación no manejado: ${type}`);
@@ -241,6 +254,7 @@ router.post('/webhook', async (req, res) => {
     connection.release(); // Liberar la conexión
   }
 });
+
 
 
 
