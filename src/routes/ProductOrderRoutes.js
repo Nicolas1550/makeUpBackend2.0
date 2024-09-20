@@ -237,7 +237,9 @@ router.post('/webhook', async (req, res) => {
         // Confirmar la transacción
         await connection.query('COMMIT');
         console.log('Orden creada exitosamente después de la aprobación de Mercado Pago.');
-        return res.status(201).json({ message: 'Orden creada con éxito' });
+
+        // Enviar respuesta con el mensaje de éxito y la indicación de limpiar el carrito
+        return res.status(201).json({ message: 'Orden creada con éxito, limpiar carrito' });
       } else {
         console.log(`El pago con ID ${paymentId} no fue aprobado. Estado: ${paymentData.status}`);
         return res.status(200).json({ message: `El pago no fue aprobado. Estado: ${paymentData.status}` });
