@@ -23,6 +23,7 @@ const servicesRoutes = require('./routes/ServicesRoutes');
 const emailRoutes = require('./routes/EmailRoutes');
 const orderRoutes = require('./routes/OrderRoutes');
 const productOrderRoutes = require('./routes/ProductOrderRoutes');
+const passwordResetRoutes = require('./routes/PasswordResetRoutes'); 
 
 const app = express();
 const server = http.createServer(app);
@@ -96,6 +97,7 @@ app.use('/api/email', emailRoutes);
 app.use('/api/orders', orderRoutes(io));
 app.use('/api/productOrders', productOrderRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/password', passwordResetRoutes); 
 
 io.on('connection', (socket) => {
   console.log('Nuevo cliente conectado');
