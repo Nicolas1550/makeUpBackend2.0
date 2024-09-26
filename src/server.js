@@ -12,9 +12,6 @@ const path = require('path');
 const fs = require('fs');
 require('express-async-errors');
 
-// Ya no es necesario llamar a dbConnect aquí
-const { query } = require('./db'); // Usar solo el query
-
 // Importar rutas
 const authRoutes = require('./routes/AuthRoutes');
 const jwtRoutes = require('./routes/JwtRoutes');
@@ -24,6 +21,7 @@ const emailRoutes = require('./routes/EmailRoutes');
 const orderRoutes = require('./routes/OrderRoutes');
 const productOrderRoutes = require('./routes/ProductOrderRoutes');
 const passwordResetRoutes = require('./routes/PasswordResetRoutes'); 
+const coursesRoutes = require('./routes/CoursesRoutes');  
 
 const app = express();
 const server = http.createServer(app);
@@ -98,6 +96,7 @@ app.use('/api/orders', orderRoutes(io));
 app.use('/api/productOrders', productOrderRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/password', passwordResetRoutes); 
+app.use('/api/courses', coursesRoutes);  
 
 io.on('connection', (socket) => {
   console.log('Nuevo cliente conectado');

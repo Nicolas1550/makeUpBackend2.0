@@ -15,21 +15,38 @@ const validateProduct = [
     .withMessage('El nombre es obligatorio.'),
   
   body('price')
-    .isFloat({ min: 0 }) // Permite que el precio sea 0 o mayor
+    .isFloat({ min: 0 })
     .withMessage('El precio debe ser un número mayor o igual a 0.')
     .notEmpty()
     .withMessage('El precio es obligatorio.'),
 
   body('quantity')
-    .isInt({ min: 0 }) // Permitir que la cantidad sea 0 o mayor
+    .isInt({ min: 0 })
     .withMessage('La cantidad debe ser un número entero no negativo.')
     .notEmpty()
     .withMessage('La cantidad es obligatoria.'),
-  
+
+  body('brand')
+    .isString()
+    .withMessage('La marca debe ser una cadena de texto.')
+    .notEmpty()
+    .withMessage('La marca es obligatoria.'),
+
+  body('color')
+    .isString()
+    .withMessage('El color debe ser una cadena de texto.')
+    .notEmpty()
+    .withMessage('El color es obligatorio.'),
+
+  body('category')
+    .isString()
+    .withMessage('La categoría debe ser una cadena de texto.')
+    .notEmpty()
+    .withMessage('La categoría es obligatoria.'),
+
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      console.error("Errores de validación:", errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
     next();
@@ -53,13 +70,13 @@ router.post('/add',
   validateProduct, 
   async (req, res) => {
     try {
-      const { name, price, quantity, imageFileName } = req.body;
+      const { name, price, quantity, imageFileName, brand, color, category } = req.body;
 
       const productQuery = `
-        INSERT INTO products (name, price, quantity, imageFileName, createdAt, updatedAt) 
-        VALUES (?, ?, ?, ?, NOW(), NOW())
+        INSERT INTO products (name, price, quantity, imageFileName, brand, color, category, createdAt, updatedAt) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
-      await query(productQuery, [name, price, quantity, imageFileName]);
+      await query(productQuery, [name, price, quantity, imageFileName, brand, color, category]);
 
       res.status(201).json({ message: 'Producto agregado con éxito' });
     } catch (error) {
@@ -113,15 +130,17 @@ router.put('/update/:id',
   validateProduct, 
   async (req, res) => {
     try {
-      const { name, price, quantity, imageFileName } = req.body;
+      // Asegúrate de incluir description en el cuerpo de la petición
+      const { name, price, quantity, imageFileName, brand, color, category, description } = req.body; 
       const productId = req.params.id;
 
+      // Incluye description en la consulta de actualización
       const updateProductQuery = `
         UPDATE products 
-        SET name = ?, price = ?, quantity = ?, imageFileName = ?, updatedAt = NOW() 
+        SET name = ?, price = ?, quantity = ?, imageFileName = ?, brand = ?, color = ?, category = ?, description = ?, updatedAt = NOW() 
         WHERE id = ?
       `;
-      const result = await query(updateProductQuery, [name, price, quantity, imageFileName, productId]);
+      const result = await query(updateProductQuery, [name, price, quantity, imageFileName, brand, color, category, description, productId]);
 
       if (result.affectedRows > 0) {
         const updatedProduct = await query('SELECT * FROM products WHERE id = ?', [productId]);
@@ -135,6 +154,8 @@ router.put('/update/:id',
     }
   }
 );
+
+
 
 
 // Ruta para eliminar un producto por ID (solo administradores)
