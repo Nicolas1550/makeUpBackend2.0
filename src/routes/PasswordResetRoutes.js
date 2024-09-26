@@ -32,7 +32,7 @@ router.post('/request-reset-password', async (req, res) => {
     );
 
     // Enviar correo con el enlace para restablecer la contraseña
-    const resetUrl = `https://peluqueria-the-best.vercel.app/reset-password/${token}`; // Ahora el token está en la URL dinámica
+    const resetUrl = `https://make-up2-0.vercel.app/reset-password/${token}`; // Ahora el token está en la URL dinámica
 
     const msg = {
       to: email,

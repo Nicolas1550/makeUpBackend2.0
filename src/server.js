@@ -27,7 +27,7 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = [
-  'https://peluqueria-the-best.vercel.app',
+  'https://make-up2-0.vercel.app',
   'http://localhost:3000',
   'http://localhost:3001',
 ];

@@ -45,7 +45,7 @@ router.get('/verify', passport.authenticate('jwt', { session: false }), async (r
 router.post('/logout', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
     // Redirigir al cliente después de cerrar sesión
-    res.redirect('https://peluqueria-the-best.vercel.app/');
+    res.redirect('https://make-up2-0.vercel.app/');
   } catch (error) {
     res.status(500).json({ message: 'Error al cerrar sesión', error: error.message });
   }
