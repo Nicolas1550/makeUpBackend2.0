@@ -3,7 +3,7 @@ const { body, validationResult } = require('express-validator');
 const passport = require('passport');
 const isAdmin = require('../middleware/IsAdmin');
 const router = express.Router();
-const { query } = require('../db');  // Conexión a MySQL
+const { query } = require('../db'); 
 
 // Middleware de validación para los cursos
 const validateCourse = [
@@ -69,7 +69,6 @@ router.post('/cursos/:id/fechas',
     [
         body('fecha_inicio')
             .custom(value => {
-                console.log('Valor recibido para fecha_inicio:', value);  // Agregamos log
                 if (!value) {
                     throw new Error('La fecha de inicio es obligatoria.');
                 }
@@ -81,7 +80,6 @@ router.post('/cursos/:id/fechas',
             }),
         body('fecha_fin')
             .custom(value => {
-                console.log('Valor recibido para fecha_fin:', value);  // Agregamos log
                 if (!value) {
                     throw new Error('La fecha de fin es obligatoria.');
                 }
@@ -100,11 +98,10 @@ router.post('/cursos/:id/fechas',
         (req, res, next) => {
             const errors = validationResult(req);
             if (!errors.isEmpty()) {
-                console.error('Errores de validación:', errors.array()); // Agregar log detallado
+                console.error('Errores de validación:', errors.array()); 
                 return res.status(400).json({ errors: errors.array() });
             }
 
-            console.log('Datos recibidos en el body:', req.body);  // Agregamos log
             next();
         }
     ],
@@ -113,7 +110,6 @@ router.post('/cursos/:id/fechas',
         const { fecha_inicio, fecha_fin, hora_inicio, hora_fin } = req.body;
 
         try {
-            console.log('Insertando en la tabla fechas_curso:', { id, fecha_inicio, fecha_fin, hora_inicio, hora_fin });
             
             const insertFechaQuery = `
                 INSERT INTO fechas_curso (curso_id, fecha_inicio, fecha_fin, hora_inicio, hora_fin) 
@@ -136,7 +132,6 @@ router.put('/cursos/:id/fechas/:fechaId',
     [
         body('fecha_inicio')
             .custom(value => {
-                console.log('Valor recibido para fecha_inicio (PUT):', value);  // Agregamos log
                 if (!value) {
                     throw new Error('La fecha de inicio es obligatoria.');
                 }
@@ -148,7 +143,6 @@ router.put('/cursos/:id/fechas/:fechaId',
             }),
         body('fecha_fin')
             .custom(value => {
-                console.log('Valor recibido para fecha_fin (PUT):', value);  // Agregamos log
                 if (!value) {
                     throw new Error('La fecha de fin es obligatoria.');
                 }
@@ -167,11 +161,10 @@ router.put('/cursos/:id/fechas/:fechaId',
         (req, res, next) => {
             const errors = validationResult(req);
             if (!errors.isEmpty()) {
-                console.error('Errores de validación (PUT):', errors.array()); // Agregar log detallado
+                console.error('Errores de validación (PUT):', errors.array());
                 return res.status(400).json({ errors: errors.array() });
             }
 
-            console.log('Datos recibidos en el body para actualizar:', req.body);  // Agregamos log
             next();
         }
     ],
@@ -180,17 +173,14 @@ router.put('/cursos/:id/fechas/:fechaId',
         const { fecha_inicio, fecha_fin, hora_inicio, hora_fin } = req.body;
 
         try {
-            console.log(`Verificando existencia de la fecha con ID: ${fechaId} en el curso con ID: ${cursoId}`);
             
             const checkFechaQuery = `SELECT * FROM fechas_curso WHERE id = ? AND curso_id = ?`;
             const fechaExistente = await query(checkFechaQuery, [fechaId, cursoId]);
 
             if (fechaExistente.length === 0) {
-                console.log('Fecha no encontrada');
                 return res.status(404).json({ message: 'Fecha no encontrada.' });
             }
 
-            console.log('Actualizando la fecha con:', { fecha_inicio, fecha_fin, hora_inicio, hora_fin });
 
             const updateFechaQuery = `
                 UPDATE fechas_curso 
@@ -200,7 +190,6 @@ router.put('/cursos/:id/fechas/:fechaId',
             const result = await query(updateFechaQuery, [fecha_inicio, fecha_fin, hora_inicio, hora_fin, fechaId, cursoId]);
 
             if (result.affectedRows === 0) {
-                console.log('No se pudo actualizar la fecha');
                 return res.status(404).json({ message: 'No se pudo actualizar la fecha.' });
             }
 

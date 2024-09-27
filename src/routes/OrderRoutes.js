@@ -1,5 +1,5 @@
 const express = require('express');
-const { query } = require('../db'); // Usamos query para consultas SQL directas
+const { query } = require('../db'); 
 const authenticate = require('../middleware/auth');
 const isAdmin = require('../middleware/IsAdmin');
 

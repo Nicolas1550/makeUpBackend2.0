@@ -1,17 +1,15 @@
 const express = require('express');
 const passport = require('passport');
 const router = express.Router();
-const { query } = require('../db'); // Conexión directa a la base de datos
+const { query } = require('../db');
 
 // Recibe `io` para poder emitir eventos WebSocket
 module.exports = (io) => {
 
   // Ruta para asignar un empleado a un servicio
-  // Ruta para asignar un empleado a un servicio
   router.post('/assignToService', passport.authenticate('jwt', { session: false }), async (req, res) => {
     const { userId, serviceId } = req.body;
 
-    console.log('Datos recibidos en el backend:', { userId, serviceId });
 
     try {
       // Verificar si el usuario tiene el rol de 'empleado'
@@ -50,7 +48,6 @@ module.exports = (io) => {
 
       // Enviar el usuario y servicio completos en lugar de solo los IDs
       const payload = { user: empleado[0], servicio: servicio[0] };
-      console.log('Asignación exitosa:', payload);
       io.emit('empleadoAsignado', payload);
       res.json(payload);
     } catch (error) {
@@ -67,7 +64,6 @@ module.exports = (io) => {
   router.post('/removeFromService', passport.authenticate('jwt', { session: false }), async (req, res) => {
     const { userId, serviceId } = req.body;
 
-    console.log('Datos recibidos en el backend para desasignar:', { userId, serviceId });
 
     try {
       // Verificar si el usuario es un empleado
@@ -98,10 +94,9 @@ module.exports = (io) => {
 
       // Enviar los objetos completos del usuario y servicio en lugar de solo los IDs
       const payload = { user: empleado[0], servicio: servicio[0] };
-      console.log('Desasignación exitosa:', payload);
 
       io.emit('empleadoDesasignado', payload);
-      res.json(payload);  // Enviar los datos completos al frontend
+      res.json(payload);  
     } catch (error) {
       console.error('Error desasignando empleado del servicio:', error.message);
       res.status(500).json({ message: 'Error desasignando empleado del servicio' });

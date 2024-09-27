@@ -1,8 +1,8 @@
 const express = require('express');
-const crypto = require('crypto'); // Para generar tokens aleatorios
-const sgMail = require('@sendgrid/mail'); // Para enviar correos con SendGrid
-const { query } = require('../db'); // Conexión a la base de datos
-const bcrypt = require('bcrypt'); // Para encriptar la nueva contraseña
+const crypto = require('crypto'); 
+const sgMail = require('@sendgrid/mail'); 
+const { query } = require('../db'); 
+const bcrypt = require('bcrypt');
 
 const router = express.Router();
 

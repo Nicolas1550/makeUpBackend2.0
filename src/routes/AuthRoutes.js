@@ -2,11 +2,8 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { body, validationResult } = require('express-validator');
-const multer = require('multer'); 
-const path = require('path');
 const router = express.Router();
-const { query } = require('../db'); // Usa la conexión directa a la base de datos
-
+const { query } = require('../db'); 
 require('dotenv').config();
 
 // Importa el middleware de subida
@@ -29,7 +26,6 @@ const validate = validations => {
   };
 };
 
-// Ruta para registrar un nuevo usuario
 // Ruta para registrar un nuevo usuario
 router.post(
   '/register',

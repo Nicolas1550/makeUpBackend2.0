@@ -4,7 +4,7 @@ const passport = require('passport');
 const isAdmin = require('../middleware/IsAdmin');
 const upload = require('../middleware/uploadMiddleware');
 const router = express.Router();
-const { query } = require('../db');  // Conexión a MySQL
+const { query } = require('../db'); 
 
 // Middleware de validación para productos
 const validateProduct = [

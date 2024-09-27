@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const passport = require('passport');
-const { query, pool } = require('../db'); // Usamos `query` para SQL puro
+const { query, pool } = require('../db'); 
 const upload = require('../middleware/uploadMiddleware');
 const { MercadoPagoConfig, Preference } = require('mercadopago');
 
@@ -14,7 +14,6 @@ const mercadoPagoConfig = new MercadoPagoConfig({
 const preference = new Preference(mercadoPagoConfig);
 const router = express.Router();
 
-// Middleware de validación para la creación de una orden
 // Middleware de validación para la creación de una orden
 const validateOrder = [
   body('total')
@@ -68,7 +67,6 @@ const validateStatus = [
 ];
 
 // Crear una nueva orden de compra con Mercado Pago
-// Crear una nueva orden de compra con Mercado Pago
 router.post('/mercadopago',
   passport.authenticate('jwt', { session: false }),
   validateOrder,
@@ -119,10 +117,10 @@ router.post('/mercadopago',
         },
         external_reference: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         metadata: {
-          user_id: req.user.id, // Agrega el user_id aquí
-          phone_number, // Se incluye el número de teléfono en los metadatos
-          total,       // Se incluye el total en los metadatos
-          products,    // Se incluyen los productos para recuperarlos en el webhook
+          user_id: req.user.id, 
+          phone_number, 
+          total,      
+          products,    
           shipping_method,
           address,
           city,
@@ -136,7 +134,6 @@ router.post('/mercadopago',
         notification_url: `${req.protocol}://${req.get('host')}/api/productOrders/webhook`,
       };
 
-      console.log('Creando preferencia en Mercado Pago...');
       const response = await preference.create({ body: preferenceData });
 
       // Ahora accedemos directamente a response.init_point y response.sandbox_init_point
@@ -147,7 +144,6 @@ router.post('/mercadopago',
       }
 
       // Enviar la URL de redirección al frontend
-      console.log('Enviando URL de redirección a Mercado Pago:', initPoint);
       return res.status(200).json({ init_point: initPoint });
 
     } catch (error) {
@@ -159,12 +155,7 @@ router.post('/mercadopago',
 
 
 
-// Éxito de la orden
-// Webhook para recibir notificaciones de Mercado Pago
-// Webhook para recibir notificaciones de Mercado Pago
-// Webhook para recibir notificaciones de Mercado Pago
-// Webhook para recibir notificaciones de Mercado Pago
-// Webhook para recibir notificaciones de Mercado Pago
+
 
 // Webhook para recibir notificaciones de Mercado Pago
 const fetch = require('node-fetch');
@@ -183,7 +174,7 @@ router.post('/webhook', async (req, res) => {
       const paymentInfo = await fetch(paymentUrl, {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${mercadoPagoConfig.accessToken}`, // Usa el accessToken configurado
+          Authorization: `Bearer ${mercadoPagoConfig.accessToken}`, 
         },
       });
 
@@ -235,16 +226,13 @@ router.post('/webhook', async (req, res) => {
 
         // Confirmar la transacción
         await connection.query('COMMIT');
-        console.log('Orden creada exitosamente después de la aprobación de Mercado Pago.');
 
         // Responder al frontend con un mensaje claro para limpiar el carrito
         return res.status(201).json({ message: 'Orden creada con éxito, limpiar carrito' });
       } else {
-        console.log(`El pago con ID ${paymentId} no fue aprobado. Estado: ${paymentData.status}`);
         return res.status(200).json({ message: `El pago no fue aprobado. Estado: ${paymentData.status}` });
       }
     } else {
-      console.log(`Tipo de notificación no manejado: ${type}`);
       return res.status(200).json({ message: 'Notificación recibida con éxito, pero no se manejó ningún pago.' });
     }
   } catch (error) {
@@ -252,14 +240,12 @@ router.post('/webhook', async (req, res) => {
     console.error('Error en el webhook de Mercado Pago:', error.message);
     return res.status(500).json({ error: 'Error interno del servidor' });
   } finally {
-    connection.release(); // Liberar la conexión
+    connection.release(); 
   }
 });
 
 
-// Crear una nueva orden de compra con comprobante de depósito
 
-// Importa la función getConnection desde db.js
 
 
 
@@ -330,20 +316,17 @@ router.post('/add',
 
 
 
-// Obtener todas las órdenes
-// Obtener todas las órdenes
+
 // Obtener todas las órdenes
 router.get('/', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
     const userId = req.user.id;
     const userRoles = req.user.rolesAssociation || [];
 
-    console.log(`ID del usuario: ${userId}`);
-    console.log(`Roles del usuario:`, userRoles);
+
 
     // Verifica si el usuario tiene el rol de administrador
     const userIsAdmin = Array.isArray(userRoles) && userRoles.some(role => role.nombre === 'admin');
-    console.log(`¿El usuario es administrador? ${userIsAdmin}`);
 
     // Modificamos la consulta para obtener los detalles del usuario
     const queryStr = userIsAdmin
@@ -360,10 +343,8 @@ router.get('/', passport.authenticate('jwt', { session: false }), async (req, re
       ? await query(queryStr)
       : await query(queryStr, [userId]);
 
-    console.log(`Órdenes obtenidas:`, orders);
 
     if (!orders || orders.length === 0) {
-      console.log('No se encontraron órdenes.');
       return res.status(404).json({ message: 'No se encontraron órdenes.' });
     }
 
@@ -376,7 +357,6 @@ router.get('/', passport.authenticate('jwt', { session: false }), async (req, re
         WHERE op.ProductOrderId = ?
       `, [order.id]);
 
-      console.log(`Productos para la orden ${order.id}:`, products);
       order.products = products || [];
     }
 
@@ -396,7 +376,6 @@ router.get('/', passport.authenticate('jwt', { session: false }), async (req, re
     res.set('Expires', '0');
     res.set('Surrogate-Control', 'no-store');
 
-    console.log(`Enviando órdenes al cliente.`);
     res.status(200).json(enrichedOrders);
   } catch (error) {
     console.error('Error al obtener las órdenes:', error.message);

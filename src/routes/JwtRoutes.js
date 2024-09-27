@@ -1,7 +1,7 @@
 const express = require('express');
 const passport = require('passport');
 const router = express.Router();
-const { query } = require('../db'); // Conexión directa a la base de datos
+const { query } = require('../db');
 
 // Verificación del estado de autenticación del usuario con JWT
 router.get('/verify', passport.authenticate('jwt', { session: false }), async (req, res) => {

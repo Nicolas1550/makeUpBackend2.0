@@ -1,15 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const passport = require('passport');
-const { query } = require('../db'); // Conexión directa a la base de datos
+const { query } = require('../db');
 
 module.exports = (io) => {
-  // Ruta para obtener los roles de un usuario por ID
   router.get('/roles/:id', passport.authenticate('jwt', { session: false }), async (req, res) => {
     try {
       const userId = req.params.id;
 
-      // Consulta SQL para obtener los roles del usuario
       const rolesQuery = `
         SELECT r.id, r.nombre
         FROM user_roles ur
@@ -59,7 +57,6 @@ module.exports = (io) => {
 
 
   // Ruta para obtener todos los usuarios con sus roles
-  // Ruta para obtener todos los usuarios con sus roles
   router.get('/', passport.authenticate('jwt', { session: false }), async (req, res) => {
     try {
       const usersQuery = `
@@ -87,11 +84,9 @@ module.exports = (io) => {
   });
 
   // Ruta para asignar roles a un usuario
-  // Ruta para asignar roles a un usuario
   router.patch('/assignRoles/:id', passport.authenticate('jwt', { session: false }), async (req, res) => {
     const { roles } = req.body;
 
-    console.log('Roles recibidos:', roles);
 
     if (!roles || !Array.isArray(roles)) {
       return res.status(400).json({ message: 'Se deben proporcionar roles válidos' });
@@ -100,24 +95,19 @@ module.exports = (io) => {
     try {
       const userId = req.params.id;
 
-      console.log('Asignando roles para el usuario con ID:', userId);
 
       // Eliminar roles actuales
       const deleteRolesQuery = `DELETE FROM user_roles WHERE UserId = ?`;
       await query(deleteRolesQuery, [userId]);
-      console.log('Roles actuales eliminados para el usuario con ID:', userId);
 
       // Asegurarnos de que el array de roles se pase correctamente
       const rolesList = roles.join(', ');
-      console.log('Lista de roles que se buscarán en la base de datos:', rolesList);
 
       // Verificar los roles en la base de datos
       const roleQuery = `SELECT id, nombre FROM roles WHERE nombre IN (${roles.map(() => '?').join(', ')})`;
-      console.log('Consulta SQL que se ejecutará:', roleQuery);
 
-      const rolesToAssign = await query(roleQuery, roles); // Pasar los roles directamente
+      const rolesToAssign = await query(roleQuery, roles); 
 
-      console.log('Roles encontrados en la base de datos:', rolesToAssign);
 
       // Si no encuentra roles, devolver error
       if (!rolesToAssign || rolesToAssign.length === 0) {
